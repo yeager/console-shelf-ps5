@@ -230,6 +230,9 @@ void picker_set(UiState& state, std::size_t id, bool enabled) {
 void cycle(UiState& state, int direction) {
     auto& p = state.settings.preferences;
     if (state.tab == SettingsTab::appearance) {
+        if (state.settings_focus == 5)
+            p.language = static_cast<Language>((static_cast<int>(p.language) + direction + static_cast<int>(Language::count)) %
+                                               static_cast<int>(Language::count));
         if (state.settings_focus == 0)
             p.layout = next_layout(p.layout, direction);
         if (state.settings_focus == 1 && p.layout == Layout::grid)
@@ -492,7 +495,7 @@ void input(UiState& state, Action action) {
         }
         const int max_focus =
             state.tab == SettingsTab::consoles ? 3 + static_cast<int>(console_picker(state).count) :
-            state.tab == SettingsTab::appearance || state.tab == SettingsTab::room ? 4 : 3;
+            state.tab == SettingsTab::appearance ? 5 : state.tab == SettingsTab::room ? 4 : 3;
         if (action == Action::up)
             state.settings_focus = clamp(state.settings_focus - 1, max_focus);
         if (action == Action::down)

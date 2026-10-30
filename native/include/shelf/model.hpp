@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 #include "catalog.generated.hpp"
+#include "localization.hpp"
 
 namespace shelf {
 enum class Layout { grid, swipe, shelf };
@@ -33,6 +34,7 @@ struct Availability {
 using Inventory = std::array<Availability, system_count>;
 
 struct Preferences {
+    Language language = Language::english;
     Layout layout = Layout::grid;
     GridLook grid_look = GridLook::icons;
     Scope scope = Scope::all;

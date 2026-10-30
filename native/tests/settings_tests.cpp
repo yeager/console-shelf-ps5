@@ -26,6 +26,9 @@ void write(const char* path, const char* text) {
 } // namespace
 void test_settings() {
     using namespace shelf;
+    check(localize(Language::swedish, "Language") == "Språk", "Swedish catalogue translates a UI key");
+    check(localize(Language::swedish, "Uncatalogued fallback") == "Uncatalogued fallback",
+          "new source text remains usable before its catalogue entry exists");
     const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
     char directory[128], path[160];
     std::snprintf(directory, sizeof(directory), "settings-test-%lld", static_cast<long long>(stamp));
@@ -50,6 +53,7 @@ void test_settings() {
     settings.preferences.hidden[find_system("ps2")] = true;
     settings.preferences.favorite[find_system("n64")] = true;
     settings.preferences.sort = Sort::favorites;
+    settings.preferences.language = Language::swedish;
     settings.preferences.brand = 2;
     std::strcpy(settings.preferred_emulator[find_system("ps2")].data(), "ps5sx2");
     std::strcpy(settings.preferred_emulator[find_system("ps1")].data(), "retroarch:swanstation");
@@ -66,7 +70,8 @@ void test_settings() {
     check(load_settings(path, read) == SettingsLoad::loaded, "reload valid settings");
     check(read.preferences.hidden[find_system("ps2")] && read.preferences.favorite[find_system("n64")],
           "stable console IDs survive reload");
-    check(read.preferences.sort == Sort::favorites && read.preferences.brand == 2, "sort and brand persist");
+    check(read.preferences.sort == Sort::favorites && read.preferences.brand == 2 && read.preferences.language == Language::swedish,
+          "sort, brand and language persist");
     check(std::strcmp(read.preferred_emulator[find_system("ps2")].data(), "ps5sx2") == 0,
           "preferred emulator persists");
     check(std::strcmp(read.preferred_emulator[find_system("ps1")].data(), "retroarch:swanstation") == 0 &&
