@@ -276,17 +276,16 @@ def verify(elf_path, self_path):
         (public_nid(name), provider, provider, "18")
         for provider, names in {
             "libSceLibcInternal": (
-                "aligned_alloc", "wcstoll", "wcstoul", "strncpy", "wcstod", "wcstof",
-                "__udivti3", "wcstoull", "wcstold", "freeifaddrs", "wmemcmp", "fputs",
-                "strerror_r", "__inet_aton", "wcstol", "wmemchr", "getifaddrs", "swprintf",
-                "strtold", "vfprintf", "strtof"),
+                "aligned_alloc", "wcstoll", "wcstoul", "wcstod", "wcstof", "__udivti3",
+                "wcstoull", "wcstold", "wmemcmp", "fputs", "strerror_r", "wcstol",
+                "wmemchr", "swprintf", "strtold", "vfprintf", "strtof"),
             "libkernel": (
                 "__inet_ntop", "fcntl", "read", "write", "pthread_rwlock_unlock",
-                "pthread_mutexattr_destroy", "ioctl", "unlink", "pthread_once",
+                "pthread_mutexattr_destroy", "unlink", "pthread_once",
                 "pthread_rwlock_rdlock", "poll", "pthread_rwlock_wrlock"),
             "libSceNet": (
-                "sceNetResolverStartAton", "sceNetResolverCreate", "sceNetErrnoLoc",
-                "sceNetPoolDestroy", "sceNetResolverStartNtoa", "sceNetPoolCreate",
+                "sceNetInit", "sceNetPoolCreate", "sceNetPoolDestroy",
+                "sceNetResolverCreate", "sceNetResolverStartNtoa",
                 "sceNetResolverDestroy"),
         }.items()
         for name in names
@@ -299,8 +298,10 @@ def verify(elf_path, self_path):
         }.items()
         for name in names
     }
-    require(updater_imports <= imported,
-            "The marked update client is missing an exact reviewed network/runtime import")
+    missing_updater_imports = updater_imports - imported
+    require(not missing_updater_imports,
+            "The marked update client is missing an exact reviewed network/runtime import: " +
+            ", ".join(sorted(row[0] for row in missing_updater_imports)))
     require(not (updater_static_replacements & imported),
             "A function statically supplied by the update runtime unexpectedly remains imported")
     private = b"ISSHELF_PRIVATE_UI_TEST_BRIDGE_V1" in raw

@@ -56,15 +56,15 @@
     },
     {
       "local": "native/ps5/platform/update_https_ps5.cpp",
-      "bytes": 6488,
-      "sha256": "655741cf700f91fbf34090e801245cafe37c7b0bcad86c11590b4331080df9e6",
+      "bytes": 7312,
+      "sha256": "37d5e6fb073c2c47a23192532e8af3e269a192b9231541769b1c86fdc24bc673",
       "upstream": "ps5/dischelper/https/fe_https_ps5.cpp and ps5/installer/src/net.c",
       "upstreamSha256": [
         "db5cb46f2a4cb7b230fd493d1ece3f1f79eef1f64acc3b98b0d6e2abebf3fadd",
         "9db839a1632681509a4b83eca140bd75801ccd3606b7a7ad10e7cd62d97ae416"
       ],
       "modified": true,
-      "changes": "Adapted socket connection, timeouts and three-source entropy into isShelf's fixed updater platform"
+      "changes": "Adapted PS5 native resolver, socket connection, timeouts and three-source entropy into isShelf's owned-pool updater platform"
     }
   ],
   "externalAsset": {

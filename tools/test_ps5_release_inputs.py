@@ -191,6 +191,19 @@ class ReleaseInputTests(unittest.TestCase):
         self.assertNotIn("regular(manifest_path)", body)
         self.assertNotIn("regular(journal)", body)
 
+    def test_ps5_update_https_uses_owned_pool_and_native_resolver(self):
+        root = Path(__file__).parents[1]
+        client = (root / "native/src/update_client.cpp").read_text()
+        platform = (root / "native/ps5/platform/update_https_ps5.cpp").read_text()
+        self.assertIn("(void)sceNetInit()", client)
+        self.assertIn('sceNetPoolCreate("isshelf-updater", 64 * 1024, 0)', client)
+        self.assertIn("sceNetPoolDestroy(pool_)", client)
+        self.assertEqual(client.count("MakeConsoleHttpsPlatform(network.pool(), {})"), 2)
+        self.assertIn("sceNetResolverCreate", platform)
+        self.assertIn("sceNetResolverStartNtoa", platform)
+        self.assertIn("sceNetResolverDestroy", platform)
+        self.assertNotIn("getaddrinfo", platform)
+
     def test_only_exact_license_newline_difference_is_recorded(self):
         result = verify_asset_sources({"LICENSE": b"fixture license\r\n"}, {"LICENSE": b"fixture license\n"})
         self.assertEqual(result["byteExactFiles"], 0)

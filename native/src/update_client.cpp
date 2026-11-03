@@ -18,6 +18,12 @@
 #include <sys/mount.h>
 #include <sys/stat.h>
 #include <unistd.h>
+
+extern "C" {
+int sceNetInit(void);
+int sceNetPoolCreate(const char* name, int size, int flags);
+int sceNetPoolDestroy(int pool);
+}
 #endif
 
 namespace shelf {
@@ -37,6 +43,29 @@ bool path(char* output, std::size_t capacity, const char* root, const char* suff
 }
 
 #ifdef SHELF_PS5
+class UpdateNetwork {
+    int pool_ = -1;
+
+  public:
+    UpdateNetwork(char* error, std::size_t error_capacity) {
+        // As in PS5SX2, an sceNetInit error can simply mean that networking is
+        // already initialized. The private resolver still needs its own pool.
+        (void)sceNetInit();
+        pool_ = sceNetPoolCreate("isshelf-updater", 64 * 1024, 0);
+        if (pool_ < 0 && error && error_capacity)
+            std::snprintf(error, error_capacity,
+                          "The PS5 update network pool could not be created (0x%08x).",
+                          static_cast<unsigned>(pool_));
+    }
+    ~UpdateNetwork() {
+        if (pool_ >= 0) (void)sceNetPoolDestroy(pool_);
+    }
+    UpdateNetwork(const UpdateNetwork&) = delete;
+    UpdateNetwork& operator=(const UpdateNetwork&) = delete;
+    explicit operator bool() const { return pool_ >= 0; }
+    int pool() const { return pool_; }
+};
+
 enum class PathState { missing, file, directory, other, failed };
 PathState path_state(const char* name, std::uint64_t* bytes = nullptr) {
     struct stat info{};
@@ -253,7 +282,9 @@ bool get_release_text(const char* ca_path, SDL_atomic_t& cancelled, char* data,
                       char* error, std::size_t error_capacity,
                       std::mutex& https_mutex, fe::HttpsClient*& active_https) {
     TextSink sink{data, 0, capacity, &cancelled};
-    fe::HttpsClient client(fe::MakeConsoleHttpsPlatform(0, {}));
+    UpdateNetwork network(error, error_capacity);
+    if (!network) return false;
+    fe::HttpsClient client(fe::MakeConsoleHttpsPlatform(network.pool(), {}));
     ActiveHttps active(https_mutex, active_https, client);
     client.allow_host = allowed_api_host;
     if (!initialize_https(client, ca_path, error, error_capacity)) return false;
@@ -303,7 +334,12 @@ bool download_release(const UpdateRelease& release, const char* ca_path, const c
         return false;
     }
     FileSink sink{file, offset, release.bytes, &cancelled, &progress};
-    fe::HttpsClient client(fe::MakeConsoleHttpsPlatform(0, {}));
+    UpdateNetwork network(error, error_capacity);
+    if (!network) {
+        std::fclose(file);
+        return false;
+    }
+    fe::HttpsClient client(fe::MakeConsoleHttpsPlatform(network.pool(), {}));
     ActiveHttps active(https_mutex, active_https, client);
     client.allow_host = allowed_release_host;
     std::string detail;
