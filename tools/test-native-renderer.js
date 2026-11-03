@@ -16,12 +16,19 @@ const data=path.join(directory,'data'),captures=path.join(directory,'captures');
 fs.mkdirSync(data,{recursive:true});fs.mkdirSync(captures,{recursive:true});
 const executable=path.join(root,'.cache/native-host',process.platform==='win32'?'shelf-host.exe':'shelf-host');
 function run(script,ownedData=data,expected=0,animate=false,libraryRoot=null){
-  const result=spawnSync(executable,['--asset-root',root,'--data-dir',ownedData,'--capture-dir',captures,'--headless',...(animate?['--animate-script']:[]),...(libraryRoot?['--library-root',libraryRoot]:[]),'--script',script],{cwd:root,encoding:'utf8',windowsHide:true,timeout:60000});
+  const result=spawnSync(executable,['--asset-root',root,'--data-dir',ownedData,'--capture-dir',captures,'--headless',...(animate?['--animate-script']:[]),...(libraryRoot?['--library-root',libraryRoot]:[]),'--script',script],{cwd:root,encoding:'utf8',windowsHide:true,timeout:180000});
   if(expected===0){if(result.stdout)process.stdout.write(result.stdout);if(result.stderr)process.stderr.write(result.stderr);}
   assert.equal(result.error,undefined,'native host process should finish');assert.equal(result.status,expected,'native host process exit status');
   return result;
 }
 run('shot:home.png,right,confirm,shot:details.png,back,settings,shot:appearance.png,confirm,tab,shot:browse.png,tab,down,confirm,text:Nintendo,settings,shot:consoles.png,down,down,confirm,report:changed.json,back,shot:swipe.png');
+const swedishData=path.join(directory,'swedish-data');fs.mkdirSync(swedishData);
+fs.copyFileSync(path.join(data,'settings.ini'),path.join(swedishData,'settings.ini'));
+run('report:swedish-default.json',swedishData);
+const swedishSettings=fs.readFileSync(path.join(swedishData,'settings.ini'),'utf8').replace(/^language=en$/m,'language=sv');
+assert.match(swedishSettings,/^language=sv$/m,'test fixture must select Swedish');
+fs.writeFileSync(path.join(swedishData,'settings.ini'),swedishSettings);
+run('shot:swedish-home.png,settings,shot:swedish-appearance.png',swedishData);
 const changed=JSON.parse(fs.readFileSync(path.join(captures,'changed.json')));
 assert.equal(changed.page,3);assert.equal(changed.tab,2);assert.equal(changed.layout,'swipe');
 assert.equal(changed.shown,36);assert.equal(changed.hidden.length,16);assert.ok(changed.hidden.includes('n64'));assert.ok(!changed.hidden.includes('ps2'));

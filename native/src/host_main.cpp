@@ -746,22 +746,8 @@ bool script_event(const char* token) {
             SDL_PushEvent(&event);
             return true;
         }
-    if (std::strncmp(token, "text:", 5) == 0) {
-        const char* value = token + 5;
-        while (*value) {
-            SDL_Event event{};
-            event.type = SDL_TEXTINPUT;
-            auto length = std::min<std::size_t>(std::strlen(value), sizeof(event.text.text) - 1);
-            while (length && (static_cast<unsigned char>(value[length]) & 0xc0) == 0x80)
-                --length;
-            if (!length)
-                return false;
-            std::memcpy(event.text.text, value, length);
-            SDL_PushEvent(&event);
-            value += length;
-        }
-        return true;
-    }
+    if (std::strncmp(token, "text:", 5) == 0)
+        return token[5] != 0;
     SDL_Event event{};
     event.type = SDL_KEYDOWN;
     if (std::strcmp(token, "consoles") == 0)
@@ -1272,6 +1258,10 @@ int main(int argc, char** argv) {
                 result = 1;
                 break;
             }
+            // Feed scripted UTF-8 straight to the UI. SDL2-compat backed by
+            // SDL3 crashes when a synthetic SDL_TEXTINPUT event is queued.
+            if (std::strncmp(token, "text:", 5) == 0)
+                shelf::text_input(state, token + 5);
             if (std::strncmp(token, "frame:", 6) == 0)
                 script_time += static_cast<unsigned>(std::strtoul(token + 6, nullptr, 10));
             if (std::strcmp(token, "loading") == 0)
