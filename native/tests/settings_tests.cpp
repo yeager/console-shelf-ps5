@@ -27,6 +27,8 @@ void write(const char* path, const char* text) {
 void test_settings() {
     using namespace shelf;
     check(localize(Language::swedish, "Language") == "Språk", "Swedish catalogue translates a UI key");
+    check(localize(Language::swedish, "Selected console") == "Vald konsol", "Swedish catalogue translates TV choices");
+    check(localize(Language::swedish, "%zu of %zu %s") == "%zu av %zu %s", "Swedish catalogue translates formatted counters");
     check(localize(Language::swedish, "Uncatalogued fallback") == "Uncatalogued fallback",
           "new source text remains usable before its catalogue entry exists");
     const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
