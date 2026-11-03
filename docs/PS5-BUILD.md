@@ -1,6 +1,6 @@
 # PS5 cross-build status
 
-Shelf cross-compiles its C++ UI, SDL event loop, read-only discovery adapter and exact-owned Home shortcut manager into a native PS5 executable. Its software renderer uses PS5 VideoOut and a direct-memory allocator. Stable v0.1.0 is the public production build for firmware 12.20; hardware acceptance remains bound to the exact executable and package manifest supplied with that release.
+Shelf cross-compiles its C++ UI, SDL event loop, read-only discovery adapter and exact-owned Home shortcut manager into a native PS5 executable. Its software renderer uses PS5 VideoOut and a direct-memory allocator. Stable v0.1.1 is the public production build for firmware 12.20; hardware acceptance remains bound to the exact executable and package manifest supplied with that release.
 
 ## Build without a system-wide installation
 
@@ -23,7 +23,7 @@ After a verified app build, retain its own object/library inputs in a new snapsh
 npm run relink:ps5 -- --capture-inputs --inputs .cache/ps5/relink-inputs-my-build
 ```
 
-The tool checks all three original static archives against the pinned PacBrew tarball and all SDK stubs against the pinned SDK ZIP. It preserves eighteen application objects, source fingerprints and hashes. It then rebuilds the converter and links those objects into a separate output directory. Without a replacement library, both the raw executable and its SELF must reproduce the reference hashes exactly. `--libiconv`, `--sdl` and `--libsamplerate` accept replacement PS5 static libraries; these deliberately may change the result. They do not recompile Shelf or deploy anything.
+The tool checks every linked PacBrew archive, the locally rebuilt zlib archive, all linked SDK static archives and every SDK stub against pinned inputs. It preserves the complete ordered application/dependency object set, source fingerprints and hashes. It then rebuilds the converter and links those objects into a separate output directory. Without a replacement library, both the raw executable and its SELF must reproduce the reference hashes exactly. `--libiconv`, `--sdl` and `--libsamplerate` accept replacements for the three intentionally replaceable PS5 static libraries; these deliberately may change the result. They do not recompile Shelf or deploy anything.
 
 With reviewed source committed, `npm run prepare:ps5-source-kit -- --inputs .cache/ps5/relink-inputs-my-build` assembles the tracked source, notices, full library sources, original recipes and matching object/library snapshot. Its ZIP and every member are rechecked. `SOURCE-KIT.txt` documents relinking from the extracted folder and replacing libraries. First use can download the pinned public build dependencies. A cold relink from the extracted kit and full console/launch acceptance are still release gates; preparing the kit does not publish it.
 
@@ -63,6 +63,6 @@ The normal build uses the owner-approved, unmodified, hash-checked SDK helper CR
 
 ## Preparing public assets
 
-`npm run prepare:ps5-release -- --version v0.1.0 --acceptance /absolute/path/to/hardware-checks.json` prepares the seven stable-release downloads locally; it never publishes or contacts a console. The reviewed acceptance JSON must identify schema 1, firmware `12.20`, the exact `selfSHA256`, and actual owner results for every check named in `REQUIRED_CHECKS` in the tool. Missing or incomplete checks stop preparation before an output folder is created. These are human reports, not independently simulated hardware tests.
+`npm run prepare:ps5-release -- --version v0.1.1 --acceptance /absolute/path/to/hardware-checks.json` prepares the seven stable-release downloads locally; it never publishes or contacts a console. The reviewed acceptance JSON must identify schema 1, firmware `12.20`, the exact `selfSHA256`, and actual owner results for every check named in `REQUIRED_CHECKS` in the tool. Missing or incomplete checks stop preparation before an output folder is created. These are human reports, not independently simulated hardware tests.
 
 The tool requires a clean source tree, matching compiled inputs, complete console readback receipt and an exact cold-tested source/relink baseline. It preserves every tested app file except the installation text, retains the source kit's code/objects/libraries/upstream archives byte-for-byte, and updates only its publication instructions and generated metadata. It verifies all output ZIP members and writes size/SHA-256 records. The resulting public source ZIP still needs its own cold-relink check, and the final documentation needs console readback before publication. All artifacts remain under ignored `.cache/ps5/releases/`.

@@ -163,7 +163,7 @@ void test_ui_test_bridge() {
           "invalid sessions cannot activate transport");
     check(!bridge.start((directory + "missing-root").c_str(), session) &&
               !directory_exists(directory + "missing-root"), "transport never creates a missing data root");
-    check(bridge.start(root, session) && bridge.active(), "start uses existing owned data root");
+    check(bridge.start(root, session, true) && bridge.active(), "private start uses existing owned data root");
     check(!directory_exists(legacy_directory), "transport never creates a nested ui-test directory");
     make_directory(legacy_directory.c_str());
     write(legacy_directory + "/response.json", "preserved-failed-trial-evidence");
@@ -544,7 +544,7 @@ void test_ui_test_bridge() {
     contains(read(response), "\"active\":false", "final response remains available after stop");
     check(!bridge.poll(request), "stopped session cannot dispatch");
     write(published_frame, "old-frame");
-    check(bridge.start(root, other) && !exists(response) && !exists(published_frame),
+    check(bridge.start(root, other, true) && !exists(response) && !exists(published_frame),
           "new session makes previous response and frame unavailable");
     check(!bridge.poll(request), "old session request cannot act after reopen");
     write(request_file, command(other, 1, 0, "snapshot"));
@@ -561,7 +561,7 @@ void test_ui_test_bridge() {
         contains(terminal_response, terminal, "terminal status preserves its exact disposition");
         check(!bridge.poll(request), "terminal publication never reenables request dispatch");
     }
-    check(bridge.start(root, session), "close receipt starts from a fresh owner-enabled session");
+    check(bridge.start(root, session, true), "close receipt starts from a fresh owner-enabled session");
     write(request_file, command(session, 1, 7, "close"));
     check(bridge.poll(request) && request.operation == UiTestOperation::close,
           "fresh close command is accepted once");
@@ -575,13 +575,31 @@ void test_ui_test_bridge() {
     check(!bridge.start(root, "invalid") && !bridge.publish(request, 0, "closed", false, true, state, false),
           "failed start cannot publish using an older session");
     write(request_file, "malformed-stale-request");
-    check(bridge.start(root, session) && !bridge.poll(request),
+    check(bridge.start(root, session, true) && !bridge.poll(request),
           "a retained malformed old request stays inert after session start");
     write(request_file, command(session, 1, 0, "snapshot"));
     check(bridge.poll(request), "malformed old file cannot consume the fresh session sequence");
     bridge.stop();
     check(read(legacy_directory + "/response.json") == "preserved-failed-trial-evidence",
           "existing nested failed-trial evidence stays untouched through start, publish and stop");
+
+    UiTestBridge support;
+    check(support.start(root, other) && support.active(),
+          "public owner support starts only after physical opt-in");
+    write(request_file, command(other, 1, 0, "probe-settings-path"));
+    check(!support.poll(request), "public owner support rejects private path diagnostics");
+    write(request_file, command(other, 1, 0, "launch-confirm"));
+    check(!support.poll(request), "public owner support rejects emulator launch confirmation");
+    write(request_file, command(other, 1, 0, "right"));
+    check(support.poll(request) && request.operation == UiTestOperation::action &&
+              request.action == Action::right,
+          "public owner support accepts one bounded menu action");
+    check(support.publish(request, 1, "ok", true, true, state, false),
+          "public owner support publishes its bounded action receipt");
+    write(request_file, command(other, 2, 1, "close"));
+    check(support.poll(request) && request.operation == UiTestOperation::close,
+          "public owner support retains cooperative app close");
+    support.stop();
 
     UiState home;
     check(apply_ui_test_action(home, Action::right) && home.focus == 1, "remote direction applies one menu step");

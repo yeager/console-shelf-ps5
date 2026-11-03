@@ -23,6 +23,7 @@ enum class ConsoleTileAction {
 // Route preferences are separate from installing or removing a PS5 Home tile.
 // The host sets saved only after a durable readback of the chosen route.
 enum class RouteSaveStatus { none, pending, saved, unavailable, invalid };
+enum class UpdatePrompt { none, available, preparing, recovery };
 struct ConsoleTileRequest {
     ConsoleTileIntent intent;
     ConsoleTileAction action = ConsoleTileAction::upsert;
@@ -104,6 +105,12 @@ struct UiState {
     ConsoleTileRequest pending_tile;
     bool ui_test_active = false;
     bool close_hint_requested = false;
+    UpdatePrompt update_prompt = UpdatePrompt::none;
+    int update_focus = 0;
+    int update_progress = 0;
+    bool update_accept_requested = false;
+    bool update_cancel_requested = false;
+    char update_tag[32]{}, update_message[192]{};
     LaunchRequest pending_launch;
     char query[128]{}, console_query[128]{}, notice[192]{};
 };

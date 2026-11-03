@@ -4,6 +4,7 @@ import gzip
 import hashlib
 import json
 import lzma
+import bz2
 from pathlib import PurePosixPath
 import posixpath
 import tarfile
@@ -43,7 +44,8 @@ def git_tree(files):
 def inspect_archive(path, expected_tree=None):
     # Read past the tar terminator to verify the compression trailer as well.
     expanded = 0
-    with (lzma.open if path.name.endswith(".xz") else gzip.open)(path, "rb") as stream:
+    opener = lzma.open if path.name.endswith(".xz") else bz2.open if path.name.endswith(".bz2") else gzip.open
+    with opener(path, "rb") as stream:
         while block := stream.read(1024 * 1024):
             expanded += len(block)
             require(expanded <= 512 * 1024 * 1024, "Source archive expansion limit")
@@ -105,14 +107,29 @@ def prepare():
         source = library["source"]
         archive = download(source, SOURCE_CACHE / source["file"])
         inspected = inspect_archive(archive, library.get("gitTree"))
-        recipe_name = library["id"] + "-PKGBUILD"
-        recipe = {**library["recipe"], "url": "https://raw.githubusercontent.com/ps5-payload-dev/pacbrew-repo/" +
-                  pins["pacbrewRelease"] + "/" + library["id"] + "/PKGBUILD"}
-        recipe_file = download(recipe, SOURCE_CACHE / recipe_name)
-        require(git_hash("blob", recipe_file.read_bytes()) == recipe["gitBlob"], "PacBrew recipe Git blob mismatch")
-        results.append({"id": library["id"], "version": library["version"],
-                        "archive": source["file"], "bytes": archive.stat().st_size, "sha256": sha256(archive),
-                        "recipe": recipe_name, "recipeSHA256": sha256(recipe_file), **inspected})
+        recipes = library.get("recipes")
+        if recipes is None and "recipe" in library:
+            recipes = [{"id": library["id"], **library["recipe"]}]
+        recipe_results = []
+        for recipe in recipes or []:
+            recipe_name = library["id"] + "-" + recipe["id"] + "-PKGBUILD"
+            recipe_record = {**recipe, "url":
+                "https://raw.githubusercontent.com/ps5-payload-dev/pacbrew-repo/" +
+                pins["pacbrewRelease"] + "/" + recipe["id"] + "/PKGBUILD"}
+            recipe_file = download(recipe_record, SOURCE_CACHE / recipe_name)
+            require(git_hash("blob", recipe_file.read_bytes()) == recipe["gitBlob"],
+                    "PacBrew recipe Git blob mismatch")
+            recipe_results.append({"id": recipe["id"], "file": recipe_name,
+                                   "sha256": sha256(recipe_file)})
+        result = {"id": library["id"], "version": library["version"],
+                  "archive": source["file"], "bytes": archive.stat().st_size,
+                  "sha256": sha256(archive), **inspected}
+        if len(recipe_results) == 1:
+            result.update({"recipe": recipe_results[0]["file"],
+                           "recipeSHA256": recipe_results[0]["sha256"]})
+        elif recipe_results:
+            result["recipes"] = recipe_results
+        results.append(result)
         print("Verified complete source:", library["id"], inspected["members"], "members", flush=True)
     _, sdk_record = prepare_sdk_source()
     results.append(sdk_record)

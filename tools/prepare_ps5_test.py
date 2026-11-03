@@ -13,6 +13,7 @@ import zipfile
 
 from ps5_common import CACHE, ROOT, run, sha256
 from console_badges.stage_generic_tile_pack_asset import stage as stage_generic_tile_pack_asset
+from fetch_ps5_deps import prepare_update_ca
 from verify_ps5_build import require, source_fingerprint, verify_recorded_hashes
 from verify_ps5_presentation import verify as verify_presentation
 
@@ -170,6 +171,12 @@ def main():
     copy(build / "libc-a.prx", "sce_module/libc.prx")
     require(sha256(app / "sce_module/libc.prx") == "e6ff45d16adf687855cc3b33b0c8a4132b6504360b221e0a34c7e99fb3ba0036", "Wrong clean-room runtime")
     copy(ROOT / "native/ps5/param.json", "sce_sys/param.json")
+    update_ca = prepare_update_ca()
+    copy(update_ca, "assets/update-ca.pem")
+    update_ca_pin = json.loads((ROOT / "native/ps5/dependencies.json").read_text())["updateCa"]
+    require((app / "assets/update-ca.pem").stat().st_size == update_ca_pin["bytes"] and
+            sha256(app / "assets/update-ca.pem") == update_ca_pin["sha256"],
+            "Packaged update CA bundle differs from its reviewed pin")
     presentation = verify_presentation()
     for name in ("pic0.dds", "pic1.dds"):
         copy(ROOT / "native/ps5/sce_sys" / name, "sce_sys/" + name)
@@ -212,7 +219,8 @@ def main():
     copy(ROOT / "assets/backgrounds/manifest.json", "assets/backgrounds/manifest.json")
     for name in ("Poppins-Regular.ttf", "Poppins-SemiBold.ttf", "OFL.txt"):
         copy(ROOT / "native/assets/fonts" / name, "native/assets/fonts/" + name)
-    for name in ("SDL2-PS5.txt", "libsamplerate-0.2.2.txt", "LGPL-2.1.txt", "LLVM-libcxx.txt"):
+    for name in ("SDL2-PS5.txt", "libsamplerate-0.2.2.txt", "LGPL-2.1.txt", "LLVM-libcxx.txt",
+                 "Mbed-TLS-3.6.7.txt", "PS5SX2-Swordpdf-NOTICE.txt"):
         copy(ROOT / "native/third_party/licenses" / name, "licenses/" + name)
     for name in ("LICENSE", "THIRD_PARTY.md"):
         copy(ROOT / name, name)

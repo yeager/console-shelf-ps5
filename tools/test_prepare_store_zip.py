@@ -13,7 +13,7 @@ from prepare_store_zip import REQUIRED, TITLE_ID, create_store_zip, digest
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def fixture(directory, tamper=False):
+def fixture(directory, tamper=False, extra_name=None):
     param = {
         "titleId": TITLE_ID,
         "contentVersion": "00.100.022",
@@ -21,6 +21,8 @@ def fixture(directory, tamper=False):
     }
     data = {name: (json.dumps(param).encode() if name == "sce_sys/param.json"
                    else ("fixture:" + name).encode()) for name in REQUIRED}
+    if extra_name:
+        data[extra_name] = b"personal fixture"
     manifest = {
         "schema": 1,
         "titleId": TITLE_ID,
@@ -69,6 +71,20 @@ class StoreZipTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "manifest check"):
                 create_store_zip(source, output)
             self.assertFalse(output.exists())
+
+    def test_rejects_personal_data_path_without_output(self):
+        for personal in ("settings.ini", "emulators/PS5SX2/config.ini",
+                         "games/title.iso", "roms/title.bin", "bios/firmware.bin",
+                         "saves/card.bin", "artwork/custom.png", "keys/account.key",
+                         "userdata/profile.json"):
+            with self.subTest(personal=personal), \
+                    tempfile.TemporaryDirectory(dir=ROOT / ".cache") as temporary:
+                directory = Path(temporary)
+                source, _ = fixture(directory, extra_name=personal)
+                output = directory / "PPSA99541.zip"
+                with self.assertRaisesRegex(ValueError, "personal-data path"):
+                    create_store_zip(source, output)
+                self.assertFalse(output.exists())
 
 
 if __name__ == "__main__":

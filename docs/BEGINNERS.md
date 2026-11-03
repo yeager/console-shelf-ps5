@@ -2,11 +2,11 @@
 
 isShelf is a front door to the games and emulators already on your PS5. It organises the collection and opens the available launch route. It does not include or install games, emulators, BIOS files or a jailbreak.
 
-This guide covers stable **v0.1.0**, tested on firmware **12.20**. Keep your working firmware and decline system software update prompts.
+This guide covers stable **v0.1.1**, tested on firmware **12.20**. Keep your working firmware and decline system software update prompts.
 
 ## 1. Install the app once
 
-Use the [installation guide](PS5-INSTALL.md) if isShelf is not on your PS5 yet. Download **PPSA99541.zip** from the [stable release page](https://github.com/Iswebro/console-shelf-ps5/releases/tag/v0.1.0). The larger **Source-and-Relink.zip** is for source/tools; it is not the app to install.
+Use the [installation guide](PS5-INSTALL.md) if isShelf is not on your PS5 yet. Download **PPSA99541.zip** from the [stable release page](https://github.com/Iswebro/console-shelf-ps5/releases/tag/v0.1.1). The larger **Source-and-Relink.zip** is for source/tools; it is not the app to install.
 
 You need an existing homebrew setup with ShadowMountPlus, the console's ELF loader on port **9021** and `ftpsrv` on **2121**. isShelf needs FTP for discovery even when running on the console. It does not start those services for you. Its own launch helper is included: there is no extra isShelf payload to add to autoload.
 
@@ -24,6 +24,7 @@ If isShelf is installed already, close any running game or download, use your no
 | Options or the gear | Open Settings |
 | L1 / R1 in Shelf | Previous / next page of consoles; the room stays still |
 | L1 / R1 in Settings | Change settings tab |
+| L3 + R3 together | Enable/disable bounded remote support after physical confirmation |
 | Left / Right on a setting | Change its value; changes save automatically |
 | Triangle on a console or game | Add/remove a favourite |
 
@@ -76,6 +77,8 @@ Choose **Add or repair all emulator tiles** to create every shortcut supported b
 
 To clean up, open the same screen and choose **Remove this tile** or **Remove all isShelf tiles**. The app queues only shortcuts carrying isShelf's exact ownership record. Follow the on-screen **Close isShelf** action so ShadowMount can refresh Home. If a shortcut remains, reopen isShelf and use the verification/cleanup action; recovery data is deliberately kept until removal is confirmed.
 
+If you are receiving help through the desktop viewer, press **L3 + R3** together once. The header says when remote support is active. It can navigate isShelf and view isShelf's own rendered frames, but the stable build cannot run private probes or remotely control an emulator. Press **L3 + R3** again, or close isShelf, as soon as the support session is finished.
+
 ### Return to an emulator's menu
 
 Once a game is running, its controls belong to the emulator. isShelf cannot impose one menu shortcut across them. Use that emulator's configured Quick Menu/menu combination. For example, the owner's RetroArch setup uses Options + touchpad click; installing isShelf does not configure that combination on someone else's console.
@@ -116,6 +119,7 @@ Want your own startup videos? Follow [Personal TV media, step by step](PERSONAL-
 | Game also fails when opened inside the emulator | Check the dump, BIOS/companion files and emulator compatibility. A different isShelf setting cannot fix that game. |
 | Launch does nothing | Close other apps; check your existing ELF loader is available. Preserve the launch logs before another attempt. |
 | Opening background never reaches the controls | Hold Circle to close if input still works, then reopen after confirming FTP/ShadowMount services are ready. Preserve the startup log before retrying. |
+| An app update was interrupted | Reopen isShelf from its main tile and choose **Update now** again. The verified partial download resumes; an interrupted install is completed or rolled back before isShelf relaunches. Do not delete `/data/console-shelf/update` while recovery is pending. |
 | Personal TV video does not appear | [TV troubleshooting](PERSONAL-TV.md#troubleshooting): check the mode, filename, format, intro scope, static and motion settings. |
 
 For a launch bug, copy `/data/console-shelf/startup.log`, `launch-helper.log` and `launch-status.txt` to your PC **before opening isShelf again**. Include the isShelf version, PS5 firmware, selected emulator/game and exact message when reporting. Review logs and captures for personal information before sharing; remove IP addresses, credentials and anything private. Do not attach games, saves, BIOS, keys or firmware files.

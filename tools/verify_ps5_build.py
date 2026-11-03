@@ -34,6 +34,8 @@ UI42_QUARANTINED_IMPORTS_SHA256 = "fbffe89dc9b89bb2584f8a0621fde2b3f71ae4098cddd
 RELEASE_BASE_IMPORT_COUNT = 243
 RELEASE_BASE_IMPORTS_SHA256 = "0e7c291fe32a28757f9af029026475805663919abc1ff3f76de4052c2ba89091"
 OWNED_TILE_MARKER = b"ISSHELF_OWNED_TILE_WRITES_V1"
+UPDATE_CLIENT_MARKER = b"ISSHELF_IN_APP_UPDATE_CLIENT_V1"
+OWNER_SUPPORT_MARKER = b"ISSHELF_OWNER_SUPPORT_CONTROL_V1"
 
 
 def require(condition, message):
@@ -64,12 +66,16 @@ def public_nid(name):
 def source_fingerprint():
     inputs = []
     for directory in ("native/src", "native/include", "native/ps5", "native/third_party/stb",
+                      "native/third_party/ps5sx2_https",
                       "native/third_party/ps5-runtime", "native/third_party/cjson", "native/third_party/pl_mpeg",
                       "assets/backgrounds", "assets/branding", "assets/room"):
         inputs.extend(p for p in (ROOT / directory).rglob("*") if p.is_file())
     inputs += [ROOT / "tools" / name for name in ("build_ps5.py", "bootstrap_ps5_toolchain.py", "fetch_ps5_deps.py",
                                                    "ps5_common.py", "verify_ps5_build.py", "build_launch_helper.py",
                                                    "prepare_corresponding_source.py", "linked-sources.json", "build-home-art.js")]
+    # package.json supplies ISSHELF_VERSION to the native compiler. Bind it as
+    # a real build input so a version bump can never reuse an older fingerprint.
+    inputs.append(ROOT / "package.json")
     inputs += [ROOT / "tools/console_badges" / name for name in (
         "generic_tile_pack_native.hpp", "generic_tile_catalog.generated.hpp",
         "generic_tile_pack_index.generated.hpp", "sha256_stream.hpp")]
@@ -89,6 +95,9 @@ def verify_recorded_hashes(folder):
                 f"{filename} changed after its build/container validation; rebuild first")
     bridge = b"ISSHELF_PRIVATE_UI_TEST_BRIDGE_V1" in (folder / "eboot.elf").read_bytes()
     require(bridge == bool(recorded.get("uiTestBridge", False)), "Private UI test marker differs from build record")
+    owner_support = OWNER_SUPPORT_MARKER in (folder / "eboot.elf").read_bytes()
+    require(owner_support == bool(recorded.get("ownerSupportControl", False)),
+            "Owner support marker differs from build record")
     owned_tiles = OWNED_TILE_MARKER in (folder / "eboot.elf").read_bytes()
     require(owned_tiles == bool(recorded.get("ownedTileWrites", False)),
             "Owned-tile marker differs from build record")
@@ -261,7 +270,43 @@ def verify(elf_path, self_path):
     require(imported_count == len(imported), "Duplicate native import binding")
     require(not any(row[0] == public_nid("openat") for row in imported),
             "The app must not import openat from any provider")
+    require(raw.count(UPDATE_CLIENT_MARKER) == 1,
+            "The reviewed in-app update client marker must appear exactly once")
+    updater_imports = {
+        (public_nid(name), provider, provider, "18")
+        for provider, names in {
+            "libSceLibcInternal": (
+                "aligned_alloc", "wcstoll", "wcstoul", "strncpy", "wcstod", "wcstof",
+                "__udivti3", "wcstoull", "wcstold", "freeifaddrs", "wmemcmp", "fputs",
+                "strerror_r", "__inet_aton", "wcstol", "wmemchr", "getifaddrs", "swprintf",
+                "strtold", "vfprintf", "strtof"),
+            "libkernel": (
+                "__inet_ntop", "fcntl", "read", "write", "pthread_rwlock_unlock",
+                "pthread_mutexattr_destroy", "ioctl", "unlink", "pthread_once",
+                "pthread_rwlock_rdlock", "poll", "pthread_rwlock_wrlock"),
+            "libSceNet": (
+                "sceNetResolverStartAton", "sceNetResolverCreate", "sceNetErrnoLoc",
+                "sceNetPoolDestroy", "sceNetResolverStartNtoa", "sceNetPoolCreate",
+                "sceNetResolverDestroy"),
+        }.items()
+        for name in names
+    }
+    updater_static_replacements = {
+        (public_nid(name), provider, provider, "18")
+        for provider, names in {
+            "libSceLibcInternal": ("__cxa_guard_acquire", "__cxa_guard_release", "strcasecmp"),
+            "libkernel": ("dlopen", "dlsym", "dlclose", "dlerror"),
+        }.items()
+        for name in names
+    }
+    require(updater_imports <= imported,
+            "The marked update client is missing an exact reviewed network/runtime import")
+    require(not (updater_static_replacements & imported),
+            "A function statically supplied by the update runtime unexpectedly remains imported")
     private = b"ISSHELF_PRIVATE_UI_TEST_BRIDGE_V1" in raw
+    owner_support = raw.count(OWNER_SUPPORT_MARKER) == 1
+    require(raw.count(OWNER_SUPPORT_MARKER) == 1,
+            "Physical L3+R3 owner support marker must appear exactly once")
     exact_self_close_marker = b"ISSHELF_EXACT_SELF_CLOSE_V1"
     require(raw.count(exact_self_close_marker) == 1,
             "Exact self-close contract marker must appear exactly once")
@@ -305,6 +350,8 @@ def verify(elf_path, self_path):
     }
     bridge_only_imports = bridge_imports - {
         (public_nid("open"), "libkernel", "libkernel", "18"),
+        (public_nid("read"), "libkernel", "libkernel", "18"),
+        (public_nid("write"), "libkernel", "libkernel", "18"),
     }
     ps2_probe_marker = b"probe-ps2-source\x00"
     marker_count = raw.count(ps2_probe_marker)
@@ -369,6 +416,12 @@ def verify(elf_path, self_path):
             "selfCloseTitle": "PPSA99541",
             "selfCloseDelayMs": 3000,
             "selfCloseAttempts": 1,
+            "inAppUpdater": {
+                "marker": UPDATE_CLIENT_MARKER.decode("ascii"),
+                "requiredImportCount": len(updater_imports),
+                "staticReplacementCount": len(updater_static_replacements),
+                "sharedPrivateImports": ["read", "write"],
+            },
         }
     else:
         require(not (bridge_only_imports & imported),
@@ -379,10 +432,11 @@ def verify(elf_path, self_path):
                         for row in imported),
                 "Private protected-source identity imports remain in the public PS5 app")
 
-    baseline = (imported - self_close_imports -
+    baseline = ((imported - self_close_imports - updater_imports -
                 (tile_write_imports if owned_tiles else set()) -
                 (bridge_only_imports if private else set()) -
-                (ps2_probe_imports if private else set()))
+                (ps2_probe_imports if private else set())) |
+                updater_static_replacements)
     canonical = "".join("\t".join(row) + "\n" for row in sorted(baseline)).encode("ascii")
     require(len(baseline) == RELEASE_BASE_IMPORT_COUNT and
             hashlib.sha256(canonical).hexdigest() == RELEASE_BASE_IMPORTS_SHA256,
@@ -402,9 +456,15 @@ def verify(elf_path, self_path):
             "forbiddenAppImports": [
                 {"name": name, "nid": public_nid(name)}
                 for name in ("openat", "getdirentries", "fdopendir", "getuid", "geteuid",
-                             "read", "write", "fchmod")
+                             "fchmod")
             ],
+            "inAppUpdater": {
+                "marker": UPDATE_CLIENT_MARKER.decode("ascii"),
+                "requiredImportCount": len(updater_imports),
+                "staticReplacementCount": len(updater_static_replacements),
+            },
             "ownedTileWrites": owned_tiles,
+            "ownerSupportControl": owner_support,
             "uiTestBridge": False,
             "exactSelfCloseFallback": True,
         }
@@ -435,14 +495,14 @@ def verify(elf_path, self_path):
             end = strings.find(b"\0", offset)
             require(end > offset, "Unterminated module name")
             needed.append(strings[offset:end].decode("ascii"))
-    allowed = {"libSceAudioOut.prx", "libSceLibcInternal.prx", "libScePad.prx", "libSceSystemService.prx",
+    allowed = {"libSceAudioOut.prx", "libSceLibcInternal.prx", "libSceNet.prx", "libScePad.prx", "libSceSystemService.prx",
                "libSceUserService.prx", "libSceVideoOut.prx", "libkernel.prx"}
     require(set(needed) == allowed, f"Unexpected system dependency set: {needed}")
     signed = self_path.read_bytes()
     require(signed[:4] == bytes.fromhex("4f153d1d"), "Expected the native plaintext homebrew FSELF format")
     require(b"\x7fELF\x02\x01\x01\x09\x02" in signed[:4096], "SELF lacks its native ELF header")
     return {"structuralCheck": "passed", "hardwareTest": "not run", "firmware12_20": "unverified",
-            "uiTestBridge": private, "ownedTileWrites": owned_tiles,
+            "ownerSupportControl": owner_support, "uiTestBridge": private, "ownedTileWrites": owned_tiles,
             "exactSelfCloseFallback": True, "selfCloseTitle": "PPSA99541",
             "selfCloseDelayMs": 3000, "selfCloseAttempts": 1,
             "privateImportContract": private_import_contract,

@@ -28,11 +28,11 @@ A native C++/SDL app, tested on PS5 firmware **12.20**, with a separate [browser
 
 | File | Purpose |
 | --- | --- |
-| [PPSA99541.zip](https://github.com/Iswebro/console-shelf-ps5/releases/download/v0.1.0/PPSA99541.zip) | Installable PS5 app. |
-| [Complete source and relink kit](https://github.com/Iswebro/console-shelf-ps5/releases/download/v0.1.0/isShelf-v0.1.0-Source-and-Relink.zip) | Matching source, objects, libraries and build instructions. |
-| [SHA256SUMS.txt](https://github.com/Iswebro/console-shelf-ps5/releases/download/v0.1.0/SHA256SUMS.txt) | Full SHA-256 values for every payload. |
+| [PPSA99541.zip](https://github.com/Iswebro/console-shelf-ps5/releases/download/v0.1.1/PPSA99541.zip) | Installable PS5 app. |
+| [Complete source and relink kit](https://github.com/Iswebro/console-shelf-ps5/releases/download/v0.1.1/isShelf-v0.1.1-Source-and-Relink.zip) | Matching source, objects, libraries and build instructions. |
+| [SHA256SUMS.txt](https://github.com/Iswebro/console-shelf-ps5/releases/download/v0.1.1/SHA256SUMS.txt) | Full SHA-256 values for every payload. |
 
-Follow the [installation, recovery and removal guide](docs/PS5-INSTALL.md). Download [MANIFEST.json](https://github.com/Iswebro/console-shelf-ps5/releases/download/v0.1.0/MANIFEST.json) for per-file verification and [HARDWARE-CHECKS.json](https://github.com/Iswebro/console-shelf-ps5/releases/download/v0.1.0/HARDWARE-CHECKS.json) for tested scope. Stable **v0.1.0** is verified on **firmware 12.20** with the existing homebrew enabler, ShadowMountPlus, ELF loader and FTP service. No PC host is needed to run it. Emulators and games are supplied separately.
+Follow the [installation, recovery and removal guide](docs/PS5-INSTALL.md). Download [MANIFEST.json](https://github.com/Iswebro/console-shelf-ps5/releases/download/v0.1.1/MANIFEST.json) for per-file verification and [HARDWARE-CHECKS.json](https://github.com/Iswebro/console-shelf-ps5/releases/download/v0.1.1/HARDWARE-CHECKS.json) for tested scope. Stable **v0.1.1** is verified on **firmware 12.20** with the existing homebrew enabler, ShadowMountPlus, ELF loader and FTP service. No PC host is needed to run it. Emulators and games are supplied separately.
 
 isShelf is also [listed on ProsperoStore](https://prosperostore.net/app/PPSA99541/). See [store submission status](docs/STORE-LISTINGS.md) for the other destinations.
 
@@ -59,6 +59,8 @@ isShelf is also [listed on ProsperoStore](https://prosperostore.net/app/PPSA9954
 - Open the settings gear for Appearance, Sort & filter, Consoles and Play room. Search the console picker, toggle individual systems or whole brands, and show/hide search results in one click. These choices persist on the device.
 - Open a console detail page, choose a preferred detected emulator and browse its discovered games. The separate browser demo uses an example inventory and never launches PS5 software.
 - Create or update all detected emulator shortcuts from inside isShelf, using the matching console artwork and saved destination. PS4 and PS5 stay as isShelf/library destinations because those games already live on PS5 Home. Remove isShelf-owned shortcuts in one batch; the app explains that you must close isShelf so ShadowMount can refresh the Home screen.
+- On an ordinary main-tile launch, check the official stable release feed and offer **Update now** or **Later**. Downloads resume after interruption, the staged program is hash-checked before installation, and the updater is structurally unable to replace settings, emulators, games, BIOS, saves or personal artwork.
+- Press **L3 + R3** together to opt into bounded remote support; press the chord again or close isShelf to stop it. Stable builds expose menu navigation and isShelf-rendered frames only. Private probes and emulator launch control remain excluded.
 - A persistent launch panel explains the action before selection: [Open emulator library](previews/launch-library-only.png) for menu-only routes, or [Play game](previews/launch-direct-play.png) for a direct RetroArch route. It follows the preferred emulator and stays on screen while browsing.
 - Choose Vector, Gaming, Classic mint or Jade for the app logo. Vector is the default. The selected logo also appears on the room's clock/message screen and bundled intros; personal videos keep their own contents.
 
@@ -68,7 +70,7 @@ See the [mobile Swipe view](previews/carousel-mobile.png) and [Switch 2 icon](pr
 
 The [demo system catalogue](docs/SYSTEMS.md) comes from a dated PS5 setup snapshot. Its 46 RetroArch core mappings and example game names are **not** a live scan of another user's console. A mapped core or listed emulator does not guarantee a game runs. In the browser demo, “Emulator or games” shows 51 of 52 cards; Switch 2 is the hardware-reference-only card and has no launch route. The native app instead starts empty and can use its [read-only scanner](docs/DISCOVERY.md) for the owner's actual inventory.
 
-The [stable native PS5 release](https://github.com/Iswebro/console-shelf-ps5/releases/tag/v0.1.0) renders the three layouts, discovers existing libraries, saves preferences, manages isShelf-owned Home shortcuts and explains each launch route before selection. Its public build excludes the private remote-control and frame-preview bridge used during development. Hardware scope and exact download hashes are supplied with the release; emulator and native-title routes not listed there remain experimental.
+The [stable native PS5 release](https://github.com/Iswebro/console-shelf-ps5/releases/tag/v0.1.1) renders the three layouts, discovers existing libraries, saves preferences, manages isShelf-owned Home shortcuts and explains each launch route before selection. Its public build retains physically enabled L3+R3 menu support and frame preview while excluding the development-only probes and remote emulator-launch extension. Hardware scope and exact download hashes are supplied with the release; emulator and native-title routes not listed there remain experimental.
 
 ![Nintendo systems in isShelf on a real PS5](docs/images/ps5/shelf-nintendo.webp)
 

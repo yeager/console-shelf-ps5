@@ -20,8 +20,9 @@ INSTRUCTIONS = """isShelf source and relink kit (development build)
 
 This folder contains the tracked application source, artwork, credits and
 licenses, complete source archives and original release recipes for the three
-linked libraries, complete pinned SDK source for the launcher's CRT/libc, plus
-Shelf's application objects and replaceable static libraries.
+intentionally replaceable libraries, source records for every linked static
+dependency, complete pinned SDK source for the launcher's CRT/libc, plus
+Shelf's ordered application/dependency objects and exact static libraries.
 {runtime_notice}
 Upstream build scripts and PKGBUILD files are references; this kit does not
 run them.
@@ -131,6 +132,9 @@ def main():
                 if key not in source:
                     continue
                 path = SOURCE_CACHE / source[key]
+                add(target, ".cache/ps5/corresponding-source/" + path.name, path.read_bytes())
+            for recipe in source.get("recipes", []):
+                path = SOURCE_CACHE / recipe["file"]
                 add(target, ".cache/ps5/corresponding-source/" + path.name, path.read_bytes())
         add(target, "SOURCE-KIT.txt", INSTRUCTIONS.format(runtime_notice=runtime_notice,
                                                         build_command=build_command).encode())

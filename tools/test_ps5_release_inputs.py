@@ -26,8 +26,8 @@ class ReleaseInputTests(unittest.TestCase):
         self.assertTrue(private.ui_test_bridge and private.owned_tile_writes)
 
     def test_private_ui_test_build_cannot_be_released(self):
-        public = {"uiTestBridge": False, "ownedTileWrites": True,
-                  "publicImportContract": {"uiTestBridge": False, "ownedTileWrites": True,
+        public = {"ownerSupportControl": True, "uiTestBridge": False, "ownedTileWrites": True,
+                  "publicImportContract": {"ownerSupportControl": True, "uiTestBridge": False, "ownedTileWrites": True,
                                            "baselineImportCount": 243}}
         require_public_build(public)
         for value in (True, 1, "false", None):
@@ -35,15 +35,19 @@ class ReleaseInputTests(unittest.TestCase):
                 require_public_build({**public, "uiTestBridge": value})
 
     def test_release_requires_owned_tiles_and_reviewed_public_contract(self):
+        with self.assertRaisesRegex(ValueError, r"L3\+R3"):
+            require_public_build({"ownerSupportControl": False, "uiTestBridge": False,
+                                  "ownedTileWrites": True, "publicImportContract": {}})
         for value in (False, 0, "true", None):
             with self.assertRaisesRegex(ValueError, "tile manager"):
-                require_public_build({"uiTestBridge": False, "ownedTileWrites": value})
+                require_public_build({"ownerSupportControl": True, "uiTestBridge": False,
+                                      "ownedTileWrites": value})
         for contract in (None, {}, {"uiTestBridge": True, "ownedTileWrites": True,
                                     "baselineImportCount": 243},
                          {"uiTestBridge": False, "ownedTileWrites": True,
                           "baselineImportCount": 242}):
             with self.assertRaisesRegex(ValueError, "public import contract"):
-                require_public_build({"uiTestBridge": False, "ownedTileWrites": True,
+                require_public_build({"ownerSupportControl": True, "uiTestBridge": False, "ownedTileWrites": True,
                                       "publicImportContract": contract})
 
     def test_stable_and_prerelease_versions_are_explicit(self):

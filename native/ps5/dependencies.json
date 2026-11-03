@@ -19,5 +19,19 @@
     "url": "https://zlib.net/fossils/zlib-1.3.2.tar.gz",
     "sha256": "bb329a0a2cd0274d05519d61c667c062e06990d72e125ee2dfa8de64f0119d16",
     "evidence": "Canonical zlib source, source archive hash pinned by the reviewed JewelCase build scripts"
+  },
+  "mbedtls": {
+    "version": "3.6.7",
+    "url": "https://github.com/Mbed-TLS/mbedtls/releases/download/mbedtls-3.6.7/mbedtls-3.6.7.tar.bz2",
+    "bytes": 5473689,
+    "sha256": "a7e8bcbec0e6f761b4af24f25677626b35f762f68eef79c08677a363212d11f6",
+    "evidence": "Official Mbed TLS 3.6.7 release archive and SHA-256 published by the Mbed TLS project; current maintained 3.6 LTS security release"
+  },
+  "updateCa": {
+    "version": "PS5SX2-b2a886b48739395de675377b03ecce75ab3368a8",
+    "url": "https://raw.githubusercontent.com/Swordpdf/PS5SX2/b2a886b48739395de675377b03ecce75ab3368a8/ps5/installer/ca/cacert.pem",
+    "bytes": 216539,
+    "sha256": "da64603998ba72031241a425ed7e3873986d71de4f8912b9befef4d01108a22b",
+    "evidence": "Exact LF-normalized raw Git blob used by Swordpdf's pinned PS5SX2 update installer; raw bytes and SHA-256 independently verified"
   }
 }

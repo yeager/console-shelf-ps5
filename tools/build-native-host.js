@@ -8,7 +8,7 @@ const root = path.resolve(__dirname, '..');
 const build = path.join(root, '.cache/native-host');
 fs.mkdirSync(build, { recursive: true });
 function run(command,args,options={}) { const result=spawnSync(command,args,{cwd:build,stdio:'inherit',windowsHide:true,...options});if(result.error)throw result.error;if(result.status!==0)throw new Error(`Build command failed (${result.status})`); }
-const sources=['model.cpp','settings.cpp','ui.cpp','ui_test_bridge.cpp','ui_test_video.cpp','graphics.cpp','codecs.cpp','movie.cpp','library.cpp','artwork_sources.cpp','artwork.cpp','filesystem.cpp','metadata.cpp','ftp.cpp','launch_client.cpp','json.c','host_main.cpp'].map(file=>path.join(root,'native/src',file));
+const sources=['model.cpp','settings.cpp','ui.cpp','ui_test_bridge.cpp','ui_test_video.cpp','graphics.cpp','codecs.cpp','movie.cpp','library.cpp','artwork_sources.cpp','artwork.cpp','filesystem.cpp','metadata.cpp','ftp.cpp','launch_client.cpp','update.cpp','update_client.cpp','json.c','host_main.cpp'].map(file=>path.join(root,'native/src',file));
 const includes=[path.join(root,'native/include'),path.join(root,'native/third_party')];
 if(process.platform==='win32'){
   run(process.execPath,[path.join(root,'tools/fetch-native-deps.js')]);

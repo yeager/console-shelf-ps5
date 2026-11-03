@@ -1,6 +1,6 @@
 # Game artwork
 
-Stable `v0.1.0` presents front covers in console-specific 3D cases, preserves existing rendered case artwork, and uses the same presentation in list thumbnails and the room TV's favourite-game mode. A game without an image uses its console illustration.
+Stable `v0.1.1` presents front covers in console-specific 3D cases, preserves existing rendered case artwork, and uses the same presentation in list thumbnails and the room TV's favourite-game mode. A game without an image uses its console illustration.
 
 ## Console cases
 

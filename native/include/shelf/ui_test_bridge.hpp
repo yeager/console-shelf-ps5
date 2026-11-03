@@ -85,12 +85,16 @@ bool apply_ui_test_launch_confirm(UiState& state);
 // The session prevents stale replay and does not authenticate an FTP client.
 class UiTestBridge {
     bool enabled_ = false;
+    bool private_diagnostics_ = false;
     std::uint64_t next_sequence_ = 1;
     char session_[33]{};
     char directory_[2304]{}, request_path_[2304]{}, frame_new_path_[2304]{};
 
   public:
-    bool start(const char* data_root, const char* session32);
+    // Public owner support accepts only bounded menu control, snapshots and
+    // cooperative close. Development probes and emulator launch confirmation
+    // require an explicitly private session.
+    bool start(const char* data_root, const char* session32, bool private_diagnostics = false);
     void stop();
     bool active() const { return enabled_; }
     const char* session() const { return session_; }

@@ -15,6 +15,7 @@
 // arbitrary title.
 #include "shelf/launch_protocol.hpp"
 #include "shelf/catalog.generated.hpp"
+#include "shelf/update_helper.hpp"
 #include <arpa/inet.h>
 #include <cerrno>
 #include <cstddef>
@@ -751,6 +752,23 @@ int launch(void* raw, const shelf::LaunchRequest& request) {
         request.mode == shelf::LaunchMode::tile_refresh ||
         request.mode == shelf::LaunchMode::tile_residual)
         return context.launch_status = maintain_tiles(context, request);
+    if (request.mode == shelf::LaunchMode::self_update ||
+        request.mode == shelf::LaunchMode::update_recover) {
+        const int transaction = shelf::apply_update_transaction(request, context.journal);
+        AppLaunchContext params{};
+        params.size = sizeof(params);
+        params.user = user;
+        params.check_flags = 2;
+        const int reopened = sceSystemServiceLaunchApp(shelf::shelf_title_id, nullptr, &params);
+        if (context.journal) {
+            std::fprintf(context.journal,
+                         "isShelf update: transaction=0x%08x relaunch=0x%08x check_flags=0x%08x\n",
+                         static_cast<unsigned>(transaction), static_cast<unsigned>(reopened),
+                         params.check_flags);
+            std::fflush(context.journal);
+        }
+        return context.launch_status = transaction < 0 ? transaction : reopened;
+    }
     auto args = shelf::launch_arguments(request);
     AppLaunchContext params{};
     params.size = sizeof(params);
@@ -865,10 +883,12 @@ int main() {
     status(request, result_stage(result),
            result == shelf::HandoffResult::foreground_changed ? context.probe_status : context.launch_status);
     return result == shelf::HandoffResult::foreground_observed ||
-                   ((request.mode == shelf::LaunchMode::tile_uninstall ||
+                    ((request.mode == shelf::LaunchMode::tile_uninstall ||
                      request.mode == shelf::LaunchMode::tile_remove ||
                      request.mode == shelf::LaunchMode::tile_refresh ||
-                     request.mode == shelf::LaunchMode::tile_residual) &&
+                      request.mode == shelf::LaunchMode::tile_residual ||
+                      request.mode == shelf::LaunchMode::self_update ||
+                      request.mode == shelf::LaunchMode::update_recover) &&
                     result == shelf::HandoffResult::started)
                ? 0 : 1;
 }

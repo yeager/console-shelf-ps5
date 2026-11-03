@@ -2,8 +2,9 @@
 """Cross-compile Shelf in the project cache. Does not connect to a console."""
 import json
 import hashlib
+import re
 from bootstrap_ps5_toolchain import environment, host_options, prepare as prepare_compiler
-from fetch_ps5_deps import prepare as prepare_dependencies
+from fetch_ps5_deps import prepare as prepare_dependencies, prepare_mbedtls
 from ps5_common import CACHE, ROOT, run, sha256
 from verify_ps5_build import (PATH_PROBE_ELF_SHA256, PATH_PROBE_SOURCE_SHA256,
                               PATH_PROBE_V1_ELF_BYTES, PATH_PROBE_V1_ELF_SHA256,
@@ -30,6 +31,16 @@ def cached_run(args, inputs, output, env):
 
 def build(standard_runtime=True, ui_test_bridge=False, owned_tile_writes=False):
     identity = source_fingerprint()
+    sword_manifest = json.loads((ROOT / "native/third_party/ps5sx2_https/SOURCE.json").read_text())
+    for entry in sword_manifest["files"]:
+        source = ROOT / entry["local"]
+        require(source.is_file() and source.stat().st_size == entry["bytes"] and
+                sha256(source) == entry["sha256"],
+                "Adapted PS5SX2 updater source differs from its recorded pin: " + entry["local"])
+    package_version = json.loads((ROOT / "package.json").read_text()).get("version", "")
+    require(re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", package_version) is not None,
+            "package.json must contain a canonical production version")
+    version_tag = "v" + package_version
     video_sources = ROOT / "native/third_party/pl_mpeg"
     for entry in json.loads((video_sources / "SOURCE.json").read_text())["files"]:
         source = video_sources / entry["path"]
@@ -38,6 +49,7 @@ def build(standard_runtime=True, ui_test_bridge=False, owned_tile_writes=False):
     prefix = prepare_compiler()
     env = environment(prefix)
     sdk, ports, zlib = prepare_dependencies()
+    mbedtls = prepare_mbedtls()
     output = CACHE / "build"
     output.mkdir(parents=True, exist_ok=True)
     build_launch_helper(standard_runtime)
@@ -172,18 +184,37 @@ def build(standard_runtime=True, ui_test_bridge=False, owned_tile_writes=False):
               "-isystem", sdk / "target/include/c++/v1", "-isystem", sdk / "target/include",
               "-fno-stack-protector", "-fno-plt", "-femulated-tls", "-O2", "-fno-omit-frame-pointer", "-ffunction-sections", "-fdata-sections",
               "-DSHELF_PS5", "-DGS_NATIVE", "-DNDEBUG", "-D_REENTRANT", "-D_THREAD_SAFE",
+              '-DMBEDTLS_CONFIG_FILE="ps5sx2_mbedtls_config.h"', f'-DISSHELF_VERSION="{version_tag}"',
               "-I", ROOT / "native/include", "-I", ROOT / "native/ps5", "-I", ROOT / "native/third_party", "-I", output,
+              "-I", ROOT / "native/third_party/ps5sx2_https", "-I", mbedtls / "include", "-I", mbedtls / "library",
               "-I", ports / "include/SDL2", "-I", ports / "include"]
+    # L3+R3 owner support is a stable user feature. The separate private flag
+    # adds development probes, but public builds retain bounded menu control
+    # and asynchronous app-frame previews after physical opt-in.
+    common.append("-DSHELF_OWNER_SUPPORT_CONTROL")
     if ui_test_bridge:
         common.append("-DSHELF_UI_TEST_BRIDGE")
     if owned_tile_writes:
         common.append("-DSHELF_PS5_OWNED_TILE_WRITES")
-    sources = [ROOT / "native/src" / (name + ".cpp") for name in ("model", "settings", "ui", "graphics", "codecs", "movie", "library", "artwork_sources", "artwork", "filesystem", "metadata", "ftp", "launch_client", "console_tile_manager", "managed_tile_api_v1", "managed_tile_app_client", "host_main")]
+    mbedtls_sources = [
+        "aes.c", "aesni.c", "asn1parse.c", "asn1write.c", "base64.c", "bignum.c",
+        "bignum_core.c", "chacha20.c", "chachapoly.c", "cipher.c", "cipher_wrap.c",
+        "constant_time.c", "ctr_drbg.c", "ecdh.c", "ecdsa.c", "ecp.c", "ecp_curves.c",
+        "entropy.c", "error.c", "gcm.c", "md.c", "oid.c", "pem.c", "pk.c", "pk_ecc.c",
+        "pk_wrap.c", "pkparse.c", "platform_util.c", "poly1305.c", "rsa.c",
+        "rsa_alt_helpers.c", "sha1.c", "sha256.c", "sha512.c", "ssl_ciphersuites.c",
+        "ssl_client.c", "ssl_msg.c", "ssl_tls.c", "ssl_tls12_client.c", "x509.c", "x509_crt.c",
+    ]
+    sources = [ROOT / "native/src" / (name + ".cpp") for name in ("model", "settings", "ui", "graphics", "codecs", "movie", "library", "artwork_sources", "artwork", "filesystem", "metadata", "ftp", "launch_client", "update", "update_client", "console_tile_manager", "managed_tile_api_v1", "managed_tile_app_client", "host_main")]
     sources += [ROOT / "native/src/json.c"]
-    if ui_test_bridge:
-        sources.append(ROOT / "native/src/ui_test_bridge.cpp")
-        sources.append(ROOT / "native/src/ui_test_video.cpp")
-    sources += [ROOT / "native/ps5/platform" / name for name in ("alloc.c", "vout.c", "shims.c", "lifecycle.c")]
+    sources += [ROOT / "native/third_party/ps5sx2_https/fe_https.cpp",
+                ROOT / "native/third_party/ps5sx2_https/ps5sx2_mbedtls_platform.c",
+                ROOT / "native/ps5/platform/update_https_ps5.cpp"]
+    sources += [mbedtls / "library" / name for name in mbedtls_sources]
+    sources.append(ROOT / "native/src/ui_test_bridge.cpp")
+    sources.append(ROOT / "native/src/ui_test_video.cpp")
+    sources += [ROOT / "native/ps5/platform" / name for name in
+                ("alloc.c", "vout.c", "shims.c", "lifecycle.c")]
     sources += [runtime / "app_crt.cpp", runtime / "app_cpp_runtime.cpp"]
     objects = []
     for source in sources:
@@ -203,9 +234,16 @@ def build(standard_runtime=True, ui_test_bridge=False, owned_tile_writes=False):
     # directly so no global llvm-config symlink or installation is needed.
     pie = output / "shelf-pie.elf"
     run([prefix / "usr/bin/ld.lld-18", "-m", "elf_x86_64", "-pie", "-z", "max-page-size=0x4000",
+         "--no-dynamic-linker",
          "-mllvm", "-emulated-tls", "--hash-style=gnu", "--eh-frame-hdr", "-T", runtime / "ps5-pie.ld",
+         "-T", ROOT / "native/third_party/ps5sx2_https/ehframe.ld",
          "--version-script", runtime / "app-symbols.map", "-e", "_start", "-o", pie, *objects,
-         "--start-group", *(ports / "lib" / name for name in ("libSDL2.a", "libiconv.a", "libsamplerate.a")),
+         "-L", sdk / "target/lib",
+         "--start-group", *(ports / "lib" / name for name in
+                             ("libSDL2.a", "libiconv.a", "libsamplerate.a", "libminizip.a")),
+         local_zlib / "libz.a",
+         *(sdk / "target/lib" / name for name in
+           ("libc++.a", "libc++abi.a", "libunwind.a", "libc.a", "libpthread.a")),
          "--end-group", "--as-needed", *sorted((sdk / "target/lib").glob("*.so"))], env=env)
     elf = output / "eboot.elf"
     run([tool, "link", "--in", pie, "--out", elf, "--stub-dir", sdk / "target/lib",
@@ -214,6 +252,8 @@ def build(standard_runtime=True, ui_test_bridge=False, owned_tile_writes=False):
     run([tool, "self", "--sign", "--in", elf, "--out", signed, "--magic", "0x1D3D154F"], env=env)
     run([tool, "self", "--inspect", "--file", signed], env=env)
     report = verify(elf, signed)
+    require(report["ownerSupportControl"] is True,
+            "Stable PS5 builds must retain physical L3+R3 owner support")
     require(report["uiTestBridge"] == ui_test_bridge, "Private UI test build marker differs from requested options")
     require(report["ownedTileWrites"] == owned_tile_writes,
             "Private owned-tile build marker differs from requested options")
@@ -275,7 +315,7 @@ def parse_options(arguments=None):
                                 help="Build the diagnostic helper that cannot launch on the owner's console")
     parser.set_defaults(standard_helper_runtime=True)
     parser.add_argument("--ui-test-bridge", action="store_true",
-                        help="Private only: compile owner-enabled menu control and frame snapshots; blocks public release")
+                        help="Private only: add diagnostic probes to the always-present owner support control; blocks public release")
     parser.add_argument("--owned-tile-writes", action="store_true",
                         help="Compile the exact-owned-source tile add/edit/remove manager")
     return parser.parse_args(arguments)

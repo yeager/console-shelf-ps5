@@ -11,6 +11,7 @@
 #include "shelf/console_tile_remembered_startup.hpp"
 #include "shelf/console_tile_startup.hpp"
 #include "shelf/launch_client.hpp"
+#include "shelf/update_client.hpp"
 #if defined(SHELF_PS5) && defined(SHELF_UI_TEST_BRIDGE)
 #include "shelf/ui_test_remote_arm.hpp"
 #include "shelf/console_tile_path_probe.hpp"
@@ -23,7 +24,7 @@
 #include "shelf/memory.hpp"
 #include "shelf/navigation.hpp"
 #include "shelf/pairing_capture_gate.hpp"
-#if !defined(SHELF_PS5) || defined(SHELF_UI_TEST_BRIDGE)
+#if !defined(SHELF_PS5) || defined(SHELF_OWNER_SUPPORT_CONTROL) || defined(SHELF_UI_TEST_BRIDGE)
 #define SHELF_HAS_UI_TEST_BRIDGE
 #include "shelf/ui_test_bridge.hpp"
 #include "shelf/ui_test_video.hpp"
@@ -37,6 +38,9 @@
 #include <cstring>
 #include <ctime>
 #include <new>
+#ifndef ISSHELF_VERSION
+#define ISSHELF_VERSION "v0.1.1"
+#endif
 #ifdef SHELF_PS5
 #include "platform/platform.h"
 #include "shelf/console_tile_job_routes.hpp"
@@ -56,7 +60,7 @@
 #include "shelf_launch_asset.hpp"
 #include <time.h>
 // The public PS5 build owns only shortcuts carrying isShelf's exact source
-// record. Private remote control and diagnostic probes use a separate flag.
+// record. Owner-enabled menu support is separate from private diagnostics.
 #if defined(SHELF_PS5_OWNED_TILE_WRITES)
 static_assert(shelf::console_tile_writes_enabled,
               "Owned-tile builds must open the exact ownership write gate");
@@ -65,6 +69,12 @@ static_assert(shelf::console_tile_writes_enabled,
 #else
 static_assert(!shelf::console_tile_writes_enabled,
               "Read-only PS5 builds must keep tile writes disabled");
+#endif
+[[gnu::used]] static const char update_client_marker[] =
+    "ISSHELF_IN_APP_UPDATE_CLIENT_V1";
+#if defined(SHELF_OWNER_SUPPORT_CONTROL)
+[[gnu::used]] static const char owner_support_control_marker[] =
+    "ISSHELF_OWNER_SUPPORT_CONTROL_V1";
 #endif
 static_assert(!shelf::managed_tile_app_client::requests_enabled,
               "Managed tile requests need credential and journal custody");
@@ -1004,6 +1014,13 @@ int main(int argc, char** argv) {
     if (state.library && !state.library->scan.complete && !state.notice[0])
         std::snprintf(state.notice, sizeof(state.notice),
                       "Library scan incomplete. Keep ftpsrv running and reopen isShelf to try again.");
+#ifdef SHELF_PS5
+    char update_result_notice[192]{};
+    if (shelf::take_update_result(data, update_result_notice)) {
+        std::snprintf(state.notice, sizeof(state.notice), "%s", update_result_notice);
+        startup("in-app update result", update_result_notice);
+    }
+#endif
     SDL_SetMainReady();
 #ifdef SHELF_PS5
     startup("video starting");
@@ -1081,6 +1098,15 @@ int main(int argc, char** argv) {
     shelf::CloseGesture close_gesture;
     shelf::CloseHint close_hint;
     shelf::LaunchClient launcher;
+#ifdef SHELF_PS5
+    shelf::UpdateClient updater;
+    shelf::UpdateRelease offered_update{};
+    char recovery_update_tag[32]{}, recovery_manifest_sha256[65]{};
+    bool recovery_committed = false;
+    bool update_initialized = false, update_preparing = false;
+    char update_ca_path[2304];
+    std::snprintf(update_ca_path, sizeof(update_ca_path), "%s/assets/update-ca.pem", assets);
+#endif
     shelf::LaunchVisibilityGate launch_visibility;
     bool ui_test_probing = false;
 #ifdef SHELF_HAS_UI_TEST_BRIDGE
@@ -1147,6 +1173,11 @@ int main(int argc, char** argv) {
     const char* ui_test_result = "ready";
     SDL_JoystickID ui_test_controller = -1;
     bool ui_test_left = false, ui_test_right = false, ui_test_chord = false;
+#if defined(SHELF_UI_TEST_BRIDGE)
+    constexpr bool ui_test_private_diagnostics = true;
+#else
+    constexpr bool ui_test_private_diagnostics = false;
+#endif
     auto local_ui_changed = [&]() {
         ++ui_revision;
         if (ui_test_pending && ui_test_request.sequence && !ui_test_closing && !ui_test_probing)
@@ -1159,8 +1190,8 @@ int main(int argc, char** argv) {
         std::snprintf(session, sizeof(session), "%016llx%016llx",
                       static_cast<unsigned long long>(SDL_GetPerformanceCounter()),
                       static_cast<unsigned long long>(std::time(nullptr)));
-        if (!ui_test.start(data, session)) {
-            std::snprintf(state.notice, sizeof(state.notice), "UI test control could not open its own folder.");
+        if (!ui_test.start(data, session, ui_test_private_diagnostics)) {
+            std::snprintf(state.notice, sizeof(state.notice), "Remote support could not open its own folder.");
             redraw = true;
             return;
         }
@@ -1193,8 +1224,13 @@ int main(int argc, char** argv) {
         ++ui_revision;
         if (!ui_video.start(data, ui_test.session(), ui_revision))
             startup("private preview unavailable", "menu control remains available");
-        std::snprintf(state.notice, sizeof(state.notice), "UI test control enabled until stopped. L3 + R3 disables it.");
-        startup("ISSHELF_PRIVATE_UI_TEST_BRIDGE_V1", "control enabled; menu actions only");
+        std::snprintf(state.notice, sizeof(state.notice),
+                      ui_test_private_diagnostics
+                          ? "Private test control enabled. L3 + R3 disables it."
+                          : "Remote support enabled. L3 + R3 disables it; private diagnostics stay unavailable.");
+        startup(ui_test_private_diagnostics ? "ISSHELF_PRIVATE_UI_TEST_BRIDGE_V1"
+                                            : "owner remote support enabled",
+                "physical L3 + R3 opt-in; bounded menu actions only");
         redraw = true;
     };
     if (ui_test_requested)
@@ -1205,6 +1241,12 @@ int main(int argc, char** argv) {
         // This retained marker is independently checked before release packaging.
         startup("ISSHELF_PRIVATE_UI_TEST_BRIDGE_V1", "disabled until owner clicks L3 + R3");
     }
+#endif
+#endif
+#ifdef SHELF_PS5
+    bool update_eligible = console_tile_input == shelf::ConsoleTileInput::absent;
+#ifdef SHELF_UI_TEST_BRIDGE
+    update_eligible = update_eligible && !ui_test_requested;
 #endif
 #endif
     while (!state.exit_requested) {
@@ -1316,6 +1358,121 @@ int main(int argc, char** argv) {
             redraw = true;
         }
         const unsigned now = scripting ? script_time : SDL_GetTicks();
+#ifdef SHELF_PS5
+        const bool update_surface_ready = !state.presentation.loading &&
+                                          state.presentation.reveal >= 1 &&
+                                          !state.exit_requested && !close_gesture.active();
+        if (update_eligible && update_surface_ready && !update_initialized) {
+            update_initialized = true;
+            startup(update_client_marker, ISSHELF_VERSION);
+            if (shelf::update_recovery_pending(data, recovery_update_tag,
+                                               recovery_manifest_sha256,
+                                               recovery_committed)) {
+                state.update_prompt = shelf::UpdatePrompt::recovery;
+                state.update_focus = 0;
+                std::snprintf(state.update_tag, sizeof(state.update_tag), "%s",
+                              recovery_update_tag);
+                std::snprintf(state.update_message, sizeof(state.update_message), "%s",
+                              recovery_committed
+                                  ? "The update committed before power was interrupted; finish its cleanup now."
+                                  : "Verified update files were preserved and can safely continue.");
+                startup("in-app update recovery available",
+                        recovery_committed ? "committed cleanup" : "resumable transaction");
+                redraw = true;
+            } else if (updater.check(data, update_ca_path, ISSHELF_VERSION)) {
+                startup("in-app update check started", ISSHELF_VERSION);
+            } else {
+                startup("in-app update check unavailable");
+            }
+        }
+        if (state.update_cancel_requested) {
+            state.update_cancel_requested = false;
+            updater.stop();
+            update_preparing = false;
+            state.update_prompt = shelf::UpdatePrompt::none;
+            std::snprintf(state.notice, sizeof(state.notice),
+                          "Update paused safely. Choose Update now later to resume it.");
+            startup("in-app update paused", "partial files retained for resume");
+            redraw = true;
+        }
+        if (state.update_accept_requested) {
+            state.update_accept_requested = false;
+            if (state.update_prompt == shelf::UpdatePrompt::available) {
+                if (updater.prepare(offered_update, data, update_ca_path)) {
+                    update_preparing = true;
+                    state.update_prompt = shelf::UpdatePrompt::preparing;
+                    state.update_progress = 0;
+                    std::snprintf(state.update_message, sizeof(state.update_message),
+                                  "Downloading and verifying the official production package.");
+                    startup("owner approved in-app update", offered_update.tag);
+                } else {
+                    state.update_prompt = shelf::UpdatePrompt::none;
+                    std::snprintf(state.notice, sizeof(state.notice),
+                                  "The update could not start. Nothing was changed.");
+                }
+                redraw = true;
+            } else if (state.update_prompt == shelf::UpdatePrompt::recovery) {
+                state.update_prompt = shelf::UpdatePrompt::none;
+                state.pending_launch = {};
+                state.pending_launch.mode = shelf::LaunchMode::update_recover;
+                std::snprintf(state.pending_launch.title, sizeof(state.pending_launch.title), "%s",
+                              shelf::shelf_title_id);
+                std::snprintf(state.pending_launch.rom, sizeof(state.pending_launch.rom), "%s",
+                              recovery_update_tag);
+                std::snprintf(state.pending_launch.core, sizeof(state.pending_launch.core), "%s",
+                              recovery_manifest_sha256);
+                state.launch_requested = true;
+                startup("owner approved update resume", recovery_update_tag);
+                redraw = true;
+            }
+        }
+        if (update_preparing) {
+            const int progress = updater.progress();
+            if (progress != state.update_progress) {
+                state.update_progress = progress;
+                redraw = true;
+            }
+        }
+        shelf::UpdateWorkOutcome update_outcome;
+        if (updater.take(update_outcome)) {
+            const bool was_preparing = update_preparing;
+            update_preparing = false;
+            if (update_outcome.state == shelf::UpdateWorkState::available) {
+                offered_update = update_outcome.release;
+                state.update_prompt = shelf::UpdatePrompt::available;
+                state.update_focus = 0;
+                std::snprintf(state.update_tag, sizeof(state.update_tag), "%s", offered_update.tag);
+                std::snprintf(state.update_message, sizeof(state.update_message), "%s",
+                              update_outcome.message);
+                startup("production update available", offered_update.tag);
+            } else if (update_outcome.state == shelf::UpdateWorkState::ready) {
+                state.update_prompt = shelf::UpdatePrompt::none;
+                state.pending_launch = {};
+                state.pending_launch.mode = shelf::LaunchMode::self_update;
+                std::snprintf(state.pending_launch.title, sizeof(state.pending_launch.title), "%s",
+                              shelf::shelf_title_id);
+                std::snprintf(state.pending_launch.rom, sizeof(state.pending_launch.rom), "%s",
+                              update_outcome.release.tag);
+                std::snprintf(state.pending_launch.core, sizeof(state.pending_launch.core), "%s",
+                              update_outcome.manifest_sha256);
+                state.launch_requested = true;
+                startup("verified update staged", update_outcome.release.tag);
+            } else if (update_outcome.state == shelf::UpdateWorkState::cancelled) {
+                state.update_prompt = shelf::UpdatePrompt::none;
+                std::snprintf(state.notice, sizeof(state.notice),
+                              "Update paused safely. It can resume later.");
+            } else if (update_outcome.state == shelf::UpdateWorkState::failed) {
+                state.update_prompt = shelf::UpdatePrompt::none;
+                startup(was_preparing ? "update preparation failed" : "background update check failed",
+                        update_outcome.message);
+                if (was_preparing)
+                    std::snprintf(state.notice, sizeof(state.notice), "%s", update_outcome.message);
+            } else {
+                startup("background update check complete", update_outcome.message);
+            }
+            redraw = true;
+        }
+#endif
 #ifndef SHELF_PS5
         if (mock_pairing_after_ms && !scripting &&
             static_cast<unsigned>(now - opened_at) >= mock_pairing_after_ms) {
@@ -1747,7 +1904,7 @@ int main(int argc, char** argv) {
                             ui_test_pending = true;
                             ui_test_result = "owner-stopped";
                             ui_test_capture_at = SDL_GetTicks();
-                            std::snprintf(state.notice, sizeof(state.notice), "UI test control disabled.");
+                            std::snprintf(state.notice, sizeof(state.notice), "Remote support disabled.");
                             redraw = true;
                         } else
                             arm_ui_test();
@@ -2595,6 +2752,9 @@ int main(int argc, char** argv) {
     tile_worker.join();
 #endif
     launcher.stop();
+#ifdef SHELF_PS5
+    updater.stop();
+#endif
     for (auto* controller : controllers)
         if (controller)
             SDL_GameControllerClose(controller);

@@ -17,11 +17,26 @@ from build_ps5 import cached_run
 from ps5_common import ROOT, CACHE, fetch, prepare_archive, run, sha256
 from verify_ps5_build import require, source_fingerprint, verify, verify_recorded_hashes
 
-OBJECTS = ("model", "settings", "ui", "graphics", "codecs", "movie", "library",
-           "artwork_sources", "artwork", "filesystem", "metadata", "ftp", "launch_client",
-           "console_tile_manager", "managed_tile_api_v1", "managed_tile_app_client", "host_main",
-           "json", "alloc", "vout", "shims", "lifecycle", "app_crt", "app_cpp_runtime")
-LIBRARIES = ("libSDL2.a", "libiconv.a", "libsamplerate.a")
+MBEDTLS_OBJECTS = (
+    "aes", "aesni", "asn1parse", "asn1write", "base64", "bignum", "bignum_core",
+    "chacha20", "chachapoly", "cipher", "cipher_wrap", "constant_time", "ctr_drbg",
+    "ecdh", "ecdsa", "ecp", "ecp_curves", "entropy", "error", "gcm", "md", "oid",
+    "pem", "pk", "pk_ecc", "pk_wrap", "pkparse", "platform_util", "poly1305", "rsa",
+    "rsa_alt_helpers", "sha1", "sha256", "sha512", "ssl_ciphersuites", "ssl_client",
+    "ssl_msg", "ssl_tls", "ssl_tls12_client", "x509", "x509_crt")
+OBJECTS = (
+    "model", "settings", "ui", "graphics", "codecs", "movie", "library",
+    "artwork_sources", "artwork", "filesystem", "metadata", "ftp", "launch_client",
+    "update", "update_client", "console_tile_manager", "managed_tile_api_v1",
+    "managed_tile_app_client", "host_main", "json", "fe_https", "ps5sx2_mbedtls_platform",
+    "update_https_ps5", *MBEDTLS_OBJECTS, "ui_test_bridge", "ui_test_video",
+    "alloc", "vout", "shims", "lifecycle",
+    "app_crt", "app_cpp_runtime")
+REPLACEABLE_LIBRARIES = ("libSDL2.a", "libiconv.a", "libsamplerate.a")
+PORT_LIBRARIES = (*REPLACEABLE_LIBRARIES, "libminizip.a")
+BUILT_LIBRARIES = ("libz.a",)
+SDK_STATIC_LIBRARIES = ("libc++.a", "libc++abi.a", "libunwind.a", "libc.a", "libpthread.a")
+LIBRARIES = (*PORT_LIBRARIES, *BUILT_LIBRARIES, *SDK_STATIC_LIBRARIES)
 INPUTS = CACHE / "relink-inputs"
 
 
@@ -51,10 +66,26 @@ def sdk_stubs(sdk, archive):
     return result
 
 
+def sdk_static_libraries(sdk, archive):
+    prefix = "ps5-payload-sdk/target/lib/"
+    result = {}
+    with zipfile.ZipFile(archive) as source:
+        for name in SDK_STATIC_LIBRARIES:
+            raw = source.read(prefix + name)
+            record = {"bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest()}
+            checked(sdk / "target/lib" / name, record)
+            result[name] = record
+    return result
+
+
 def capture(sdk, pins, inputs):
     require(not inputs.exists(), "Relink snapshot already exists; use --inputs for a new build snapshot")
     build = CACHE / "build"
     verified = verify_recorded_hashes(build)
+    require(verified.get("ownerSupportControl") is True,
+            "Capture relink inputs only from a build with L3+R3 owner support")
+    require(verified.get("uiTestBridge") is False,
+            "Capture relink inputs only from the verified public build")
     require(source_fingerprint() == json.loads((build / "build-source.json").read_text()),
             "Application sources differ from the recorded build")
     ports_archive = fetch(pins["ports"]["url"], CACHE / "downloads/pacbrew-v0.40.2.tar.gz",
@@ -63,7 +94,7 @@ def capture(sdk, pins, inputs):
     with tarfile.open(ports_archive, "r|gz") as archive:
         for member in archive:
             name = "opt/ps5-payload-sdk/target/user/homebrew/lib/"
-            if member.name.startswith(name) and member.name[len(name):] in LIBRARIES:
+            if member.name.startswith(name) and member.name[len(name):] in PORT_LIBRARIES:
                 require(member.isfile(), "Library is not a regular archive member")
                 library = member.name[len(name):]
                 digest = hashlib.sha256()
@@ -73,7 +104,10 @@ def capture(sdk, pins, inputs):
                 record = {"bytes": member.size, "sha256": digest.hexdigest()}
                 checked(CACHE / "ports-v0.40.2/lib" / library, record)
                 libraries[library] = record
-    require(set(libraries) == set(LIBRARIES), "Pinned ports archive lacks a linked library")
+    require(set(libraries) == set(PORT_LIBRARIES), "Pinned ports archive lacks a linked library")
+    libraries["libz.a"] = file_record(build / "zlib/libz.a")
+    sdk_archive = CACHE / "downloads/ps5-payload-sdk-v0.42.zip"
+    libraries.update(sdk_static_libraries(sdk, sdk_archive))
     stubs = sdk_stubs(sdk, CACHE / "downloads/ps5-payload-sdk-v0.42.zip")
     objects = {name + ".o": file_record(build / (name + ".o")) for name in OBJECTS}
     inputs.mkdir(parents=True)
@@ -83,7 +117,10 @@ def capture(sdk, pins, inputs):
         shutil.copyfile(build / name, inputs / "objects" / name)
         checked(inputs / "objects" / name, record)
     for name, record in libraries.items():
-        shutil.copyfile(CACHE / "ports-v0.40.2/lib" / name, inputs / "libraries" / name)
+        source = (CACHE / "ports-v0.40.2/lib" / name if name in PORT_LIBRARIES else
+                  build / "zlib/libz.a" if name in BUILT_LIBRARIES else
+                  sdk / "target/lib" / name)
+        shutil.copyfile(source, inputs / "libraries" / name)
         checked(inputs / "libraries" / name, record)
     shutil.copyfile(build / "build-source.json", inputs / "build-source.json")
     report = json.loads((build / "structural-check.json").read_text())
@@ -96,7 +133,8 @@ def capture(sdk, pins, inputs):
         record["launcherRuntime"] = {key: helper[key] for key in
                                      ("bytes", "sha256", "runtimeMode", "permissionChanges")}
     (inputs / "link-inputs.json").write_text(json.dumps(record, indent=2) + "\n")
-    print("Retained and verified", len(objects), "application objects and three replaceable libraries.", flush=True)
+    print("Retained and verified", len(objects), "application objects and", len(libraries),
+          "exact static link inputs.", flush=True)
 
 
 def converter(prefix, env, zlib):
@@ -147,10 +185,10 @@ def main():
     objects = [checked(inputs / "objects" / name, record["objects"][name]) for name in record["objectOrder"]]
     stubs = sdk_stubs(sdk, CACHE / "downloads/ps5-payload-sdk-v0.42.zip")
     require(stubs == record["sdkStubs"], "SDK differs from the retained link inputs")
-    replacements = (args.sdl, args.libiconv, args.libsamplerate)
-    libraries = [replacement.resolve() if replacement else checked(inputs / "libraries" / name,
-                                                                  record["libraries"][name])
-                 for name, replacement in zip(LIBRARIES, replacements)]
+    replacements = dict(zip(REPLACEABLE_LIBRARIES, (args.sdl, args.libiconv, args.libsamplerate)))
+    libraries = [replacements.get(name).resolve() if replacements.get(name) else
+                 checked(inputs / "libraries" / name, record["libraries"][name])
+                 for name in LIBRARIES]
     for path in libraries:
         with path.open("rb") as source:
             require(source.read(8) == b"!<arch>\n", "Expected a PS5 static archive")
@@ -162,15 +200,17 @@ def main():
     output.mkdir(parents=True)
     runtime = ROOT / "native/third_party/ps5-runtime/tooling/native"
     pie, elf, signed = (output / name for name in ("shelf-pie.elf", "eboot.elf", "eboot.bin"))
-    run([prefix / "usr/bin/ld.lld-18", "-m", "elf_x86_64", "-pie", "-z", "max-page-size=0x4000", "-mllvm",
-         "-emulated-tls", "--hash-style=gnu", "--eh-frame-hdr", "-T", runtime / "ps5-pie.ld", "--version-script",
-         runtime / "app-symbols.map", "-e", "_start", "-o", pie, *objects, "--start-group", *libraries,
+    run([prefix / "usr/bin/ld.lld-18", "-m", "elf_x86_64", "-pie", "-z", "max-page-size=0x4000",
+         "--no-dynamic-linker", "-mllvm", "-emulated-tls", "--hash-style=gnu", "--eh-frame-hdr",
+         "-T", runtime / "ps5-pie.ld", "-T", ROOT / "native/third_party/ps5sx2_https/ehframe.ld", "--version-script",
+         runtime / "app-symbols.map", "-e", "_start", "-o", pie, *objects,
+         "-L", sdk / "target/lib", "--start-group", *libraries,
          "--end-group", "--as-needed", *(sdk / "target/lib" / name for name in sorted(stubs))], env=env)
     run([tool, "link", "--in", pie, "--out", elf, "--stub-dir", sdk / "target/lib", "--module-sdk", "0x02000009",
          "--companion-sdk", "0x08050001", "--file-name", "eboot.elf"], env=env)
     run([tool, "self", "--sign", "--in", elf, "--out", signed, "--magic", "0x1D3D154F"], env=env)
     result = verify(elf, signed)
-    modified = any(replacement is not None for replacement in replacements)
+    modified = any(replacement is not None for replacement in replacements.values())
     exact = result["self"] == record["referenceSelf"] and file_record(elf) == {
         "bytes": record["referenceElf"]["bytes"], "sha256": record["referenceElf"]["sha256"]}
     require(modified or exact, "Unmodified relink did not reproduce the verified executable")

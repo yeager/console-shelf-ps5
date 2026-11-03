@@ -1,7 +1,25 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """Fetch and verify pinned target dependencies into .cache/ps5 only."""
 import json
-from ps5_common import CACHE, ROOT, prepare_archive
+from ps5_common import CACHE, ROOT, fetch, prepare_archive
+
+
+def prepare_update_ca():
+    pins = json.loads((ROOT / "native/ps5/dependencies.json").read_text())
+    record = pins["updateCa"]
+    return fetch(record["url"], CACHE / "downloads" / "isshelf-update-ca.pem",
+                 record["sha256"], record["bytes"])
+
+
+def prepare_mbedtls():
+    pins = json.loads((ROOT / "native/ps5/dependencies.json").read_text())
+    record = pins["mbedtls"]
+    root = prepare_archive(record, "mbedtls-3.6.7.tar.bz2", CACHE / "mbedtls-3.6.7",
+                           "mbedtls-3.6.7/")
+    for required in (root / "include/mbedtls/ssl.h", root / "library/ssl_tls.c", root / "LICENSE"):
+        if not required.is_file():
+            raise RuntimeError(f"Mbed TLS dependency has an unexpected layout: {required}")
+    return root
 
 
 def prepare():
@@ -18,4 +36,5 @@ def prepare():
 
 
 if __name__ == "__main__":
-    print("Verified isolated dependencies:", *(str(p) for p in prepare()), sep="\n")
+    print("Verified isolated dependencies:", *(str(p) for p in prepare()),
+          str(prepare_mbedtls()), str(prepare_update_ca()), sep="\n")

@@ -1,6 +1,6 @@
 # Installing isShelf
 
-Native PS5 stable release v0.1.0, tested on firmware **12.20**. The app appears as **isShelf**.
+Native PS5 stable release v0.1.1, tested on firmware **12.20**. The app appears as **isShelf**.
 
 For a guided first session, see [Start using isShelf](BEGINNERS.md). To add personal intro clips after installation, use the [step-by-step TV tutorial](PERSONAL-TV.md).
 
@@ -35,6 +35,8 @@ Browse with the D-pad or left stick; Cross selects and Circle goes back. Square 
 
 In Shelf, **L1/R1** changes pages with only the consoles moving. **Sort & filter → Shelf pages** also offers one curated display of up to eight consoles; choose its members in **Consoles**. There is a Favourites-only view and an optional Reduced motion setting. **Play room** controls the TV's pictures, clock, message, intro scope, favourite-game rotation and optional static for missing content. All 52 systems include an original Shelf picture and silent intro animation; your personal PNG or compatible MPEG takes priority. Triangle on a game in Shelf's library stars it. See [personal room setup](ROOM.md) for media paths and current limitations.
 
+Press **L3 + R3** together only when you want to enable a desktop support session. The header shows **REMOTE SUPPORT ACTIVE**. Press the chord again, or close isShelf, when support is finished. Stable builds expose bounded isShelf menu control and isShelf-rendered frames; development probes and remote emulator launch control are not included. Use this only on a trusted local network.
+
 Appearance → Missing emulator artwork defaults to **Black & white** for systems without a detected emulator. Choose **Full colour** to turn that cue off. Native PS4/PS5 stay coloured. This setting changes the artwork, not which systems appear. Layout, sorting, favourites and individual console visibility save in Shelf's own data folder.
 
 Open a console to choose a preferred detected emulator or show its game library. Standalone emulators can open their own shelves; a selected RetroArch game uses a separate direct-game route. Use the release's verified-route list to distinguish accepted behavior from experimental plans. Opening can still show black before the grid; the home-screen selection artwork is confirmed.
@@ -53,7 +55,11 @@ Registrations and removals are applied after isShelf closes. Always use the on-s
 
 ## Upgrading and recovery
 
-Close Shelf and other apps before replacing files. Keep a PC backup of its program folder and `/data/console-shelf`, where its preferences live. When reading or backing up `eboot.bin` through `ftpsrv`, send the custom `SELF` command and confirm the reply explicitly says conversion is **disabled**; otherwise the server can transform the file during transfer and its hash will differ. This setting is per FTP connection.
+On an ordinary launch from the main isShelf tile, the app checks the official stable GitHub release feed. If a newer exact semantic version is available, choose **Update now** or **Later**. The updater downloads only the exact `PPSA99541.zip` asset with its published SHA-256, resumes a verified partial download after interruption, checks every staged program file, closes isShelf cooperatively, installs `eboot.bin` last and relaunches the app. An interrupted install is journalled: the next run completes it or restores the previous verified program before continuing.
+
+The in-app updater has a program-only allowlist. Its manifest cannot name `/data/console-shelf/settings.ini`, route preferences, personal room media, emulator folders, games/ROMs, BIOS, saves, keys, account data or any unknown top-level path. Those locations stay outside the replacement transaction. Do not delete `/data/console-shelf/update` while an update or recovery is pending; it holds only the partial download, staged program and rollback journal needed to resume safely.
+
+For a manual fallback, close Shelf and other apps before replacing files. Keep a PC backup of its program folder and `/data/console-shelf`, where its preferences live. When reading or backing up `eboot.bin` through `ftpsrv`, send the custom `SELF` command and confirm the reply explicitly says conversion is **disabled**; otherwise the server can transform the file during transfer and its hash will differ. This setting is per FTP connection.
 
 Replace only Shelf's owned program files, putting `eboot.bin` last, and verify the complete new file manifest before reopening. Preserve `/data/console-shelf/settings.ini` and its recovery files. An ordinary program update does not require re-registering the app's artwork.
 

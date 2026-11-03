@@ -28,6 +28,7 @@ void test_console_tile_startup();
 void test_pairing_code_entry();
 void test_console_tile_relay();
 void test_console_tile_forwarder_config();
+void test_update();
 void test_ui_test_preview();
 int main() {
     test_console_tile_forwarder_config();
@@ -111,5 +112,6 @@ int main() {
     test_launch();
     test_ui_test_bridge();
     test_ui_test_preview();
+    test_update();
     return 0;
 }

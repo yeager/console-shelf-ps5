@@ -15,6 +15,8 @@ from prepare_store_zip import create_store_zip
 from verify_ps5_build import require, source_fingerprint, verify_recorded_hashes
 
 REQUIRED_CHECKS = ("ui_navigation", "ui_settings", "circle_close", "settings_persist", "restart_reopen",
+                   "owner_support_l3_r3", "auto_update_install_relaunch", "update_preserves_settings",
+                   "update_preserves_external_content",
                    "emulator_tile_batch_create", "emulator_tile_update", "emulator_tile_remove_all",
                    "shadowmount_close_refresh", "psxs5_menu", "ps5sx2_menu", "ps5sx3_menu",
                    "retroarch_direct_game", "shared_retroarch_tile_selected_library")
@@ -24,12 +26,15 @@ ROUTES = ("PSXS5: standalone emulator library", "PS5SX2: standalone emulator lib
 
 
 def require_public_build(build):
+    require(build.get("ownerSupportControl", False) is True,
+            "Stable release builds must retain physical L3+R3 owner support")
     require(build.get("uiTestBridge", False) is False,
             "Private UI test control builds cannot become public release inputs")
     require(build.get("ownedTileWrites", False) is True,
             "Stable release builds must include the exact-owned-source tile manager")
     contract = build.get("publicImportContract")
-    require(isinstance(contract, dict) and contract.get("uiTestBridge") is False and
+    require(isinstance(contract, dict) and contract.get("ownerSupportControl") is True and
+            contract.get("uiTestBridge") is False and
             contract.get("ownedTileWrites") is True and contract.get("baselineImportCount") == 243,
             "Stable release build lacks the reviewed public import contract")
 
@@ -86,7 +91,8 @@ def verify_asset_sources(app_data, kit_data):
               "sce_sys/pic1.dds": "native/ps5/sce_sys/pic1.dds",
               "licenses/cJSON-MIT.txt": "native/third_party/cjson/LICENSE",
               "licenses/pl_mpeg-source-with-MIT-license.h": "native/third_party/pl_mpeg/pl_mpeg.h"}
-    for name in ("SDL2-PS5.txt", "libsamplerate-0.2.2.txt", "LGPL-2.1.txt", "LLVM-libcxx.txt"):
+    for name in ("SDL2-PS5.txt", "libsamplerate-0.2.2.txt", "LGPL-2.1.txt", "LLVM-libcxx.txt",
+                 "Mbed-TLS-3.6.7.txt", "PS5SX2-Swordpdf-NOTICE.txt"):
         mapped["licenses/" + name] = "native/third_party/licenses/" + name
     for name in ("stb_image", "stb_image_write", "stb_truetype"):
         mapped["licenses/" + name + "-source-with-license.h"] = "native/third_party/stb/" + name + ".h"
@@ -193,7 +199,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--acceptance", type=Path, help="Reviewed owner hardware-check JSON")
     parser.add_argument("--verify-inputs-only", action="store_true", help="Audit existing app/source inputs; no release or hardware claim")
-    parser.add_argument("--version", default="v0.1.0-alpha.1")
+    package_version = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))["version"]
+    parser.add_argument("--version", default="v" + package_version,
+                        help="Release tag (defaults to the exact package.json production version)")
     args = parser.parse_args()
     require(not (args.verify_inputs_only and args.acceptance), "Input auditing does not consume a hardware acceptance file")
     validate_release_version(args.version)
@@ -289,7 +297,7 @@ def main():
     evidence = {"schema": 1, "firmware": "12.20", "selfSHA256": build["self"]["sha256"],
                 "compiledSourceCommit": package["sourceCommit"],
                 "testedManifestSHA256": sha256(source / "manifest.json"),
-                "uiTestBridge": False, "ownedTileWrites": True,
+                "ownerSupportControl": True, "uiTestBridge": False, "ownedTileWrites": True,
                 "publicImportContract": build["publicImportContract"],
                 "checks": {name: True for name in REQUIRED_CHECKS}, "verifiedRoutes": list(ROUTES),
                 "basis": "Owner console reports; host checks and raw readbacks recorded separately",
@@ -332,7 +340,7 @@ def main():
     public_files = [{"path": name, **digest(raw)} for name, raw in sorted(app_data.items())]
     public_manifest = {"schema": 1, "version": args.version, "titleId": "PPSA99541",
                        "compiledSourceCommit": package["sourceCommit"], "launcherRuntime": runtime,
-                       "uiTestBridge": False, "ownedTileWrites": True,
+                       "ownerSupportControl": True, "uiTestBridge": False, "ownedTileWrites": True,
                        "publicImportContract": build["publicImportContract"],
                        "hardwareChecks": evidence, "sourceKit": source_info, "files": public_files,
                        "sourceAssetComparison": compared, "generatedIconReproduced": True,

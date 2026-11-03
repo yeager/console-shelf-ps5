@@ -93,6 +93,11 @@ struct FakeHandoff {
                   ? std::strcmp(r.title, "PPSA99700") == 0 &&
                         std::strstr(r.rom, "PPSA99701,PPSA99702") == r.rom &&
                         std::strstr(r.rom, "PPSA99750,PPSA99751") != nullptr
+                  : r.mode == shelf::LaunchMode::self_update ||
+                            r.mode == shelf::LaunchMode::update_recover
+                  ? std::strcmp(r.title, shelf::shelf_title_id) == 0 &&
+                        std::strcmp(r.rom, "v0.2.0") == 0 &&
+                        shelf::update_hex_sha256(r.core)
                   : std::strcmp(r.title, "PPSA99203") == 0,
               "only the requested target is handed off");
         return f.launch_result;
@@ -573,6 +578,30 @@ void test_launch() {
     check(cooperative_handoff(r, refresh_release_gap.ops()) == HandoffResult::started &&
               refresh_release_gap.launches == 1 && refresh_release_gap.idle_checks >= 5,
           "bulk refresh waits through the exact-origin title release gap, then requires stable Home");
+    r = request();
+    r.mode = LaunchMode::self_update;
+    std::strcpy(r.title, shelf_title_id);
+    std::strcpy(r.rom, "v0.2.0");
+    std::strcpy(r.core, "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
+    check(launch_request_valid(r, 1000) &&
+              encode_launch_request(r, 1000, message, sizeof(message)) &&
+              parse_launch_request(message, 1000, parsed) &&
+              parsed.mode == LaunchMode::self_update &&
+              std::strcmp(parsed.title, shelf_title_id) == 0,
+          "a verified in-app update survives the same nonce-bound cooperative close protocol");
+    FakeHandoff update_handoff;
+    update_handoff.launch_result = 0;
+    check(cooperative_handoff(r, update_handoff.ops()) == HandoffResult::started &&
+              update_handoff.launches == 1 && update_handoff.focus_reads == 0,
+          "self-update performs one post-close helper transaction without launch retry polling");
+    r.mode = LaunchMode::update_recover;
+    check(launch_request_valid(r, 1000) &&
+              encode_launch_request(r, 1000, message, sizeof(message)) &&
+              parse_launch_request(message, 1000, parsed) &&
+              parsed.mode == LaunchMode::update_recover,
+          "interrupted-update recovery uses a distinct owner-confirmed handoff mode");
+    r.core[63] = 'g';
+    check(!launch_request_valid(r, 1000), "an update without the exact lowercase manifest digest is rejected");
     r = request();
     std::memset(r.title, 'A', sizeof(r.title));
     check(!launch_request_valid(r, 1000), "nonterminated fields are bounded before string operations");

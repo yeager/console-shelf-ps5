@@ -19,11 +19,16 @@ def main(standard_runtime=False):
     output = CACHE / ("launch-helper-standard" if standard_runtime else "launch-helper")
     output.mkdir(parents=True, exist_ok=True)
     source = ROOT / "native/ps5/helper/shelf_launch.cpp"
+    update_source = ROOT / "native/ps5/helper/shelf_update.cpp"
     protocol = ROOT / "native/include/shelf/launch_protocol.hpp"
+    update_helper = ROOT / "native/include/shelf/update_helper.hpp"
+    update_protocol = ROOT / "native/include/shelf/update_protocol.hpp"
+    sha256_header = ROOT / "native/include/shelf/sha256.hpp"
     residual_guard = ROOT / "native/include/shelf/tile_residual_guard.hpp"
     catalog = ROOT / "native/include/shelf/catalog.generated.hpp"
     limits = ROOT / "native/ps5/helper/runtime_limits.c"
-    tracked_inputs = (source, protocol, residual_guard, catalog, limits)
+    tracked_inputs = (source, update_source, protocol, update_helper, update_protocol,
+                      sha256_header, residual_guard, catalog, limits)
     inputs = {p.relative_to(ROOT).as_posix(): sha256(p) for p in tracked_inputs}
     archive, sdk_source = prepare_sdk_source()
     crt_source = output / "sdk-crt"
@@ -70,18 +75,24 @@ def main(standard_runtime=False):
             data = original.read("ps5-payload-sdk/target/lib/" + name)
             require((sdk / "target/lib" / name).read_bytes() == data, "SDK link input differs from pinned release")
             sdk_links[name] = {"bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()}
-    obj, elf = output / "shelf-launch.o", output / "shelf-launch.elf"
-    run([prefix / "usr/bin/clang++-18", "-target", "x86_64-sie-ps5", "-isysroot", sdk,
-         "-isystem", sdk / "target/include/c++/v1", "-isystem", sdk / "target/include",
-         "-fvisibility-nodllstorageclass=default", "-fno-stack-protector", "-fno-plt", "-femulated-tls",
-         "-std=c++17", "-O2", "-fno-exceptions", "-fno-rtti", "-DNDEBUG", "-Wall", "-Wextra", "-Werror",
-         *(["-DSHELF_STANDARD_SDK_RUNTIME"] if standard_runtime else []),
-         "-I", ROOT / "native/include", "-c", source, "-o", obj], env=env)
+    elf = output / "shelf-launch.elf"
+    helper_objects = []
+    for helper_source in (source, update_source):
+        obj = output / (helper_source.stem + ".o")
+        run([prefix / "usr/bin/clang++-18", "-target", "x86_64-sie-ps5", "-isysroot", sdk,
+             "-isystem", sdk / "target/include/c++/v1", "-isystem", sdk / "target/include",
+             "-fvisibility-nodllstorageclass=default", "-fno-stack-protector", "-fno-plt", "-femulated-tls",
+             "-std=c++17", "-O2", "-fno-exceptions", "-fno-rtti", "-DNDEBUG", "-Wall", "-Wextra", "-Werror",
+             "-ffunction-sections", "-fdata-sections",
+             *(["-DSHELF_STANDARD_SDK_RUNTIME"] if standard_runtime else []),
+             "-I", ROOT / "native/include", "-c", helper_source, "-o", obj], env=env)
+        helper_objects.append(obj)
     # SDK v0.42's ordinary ELF-payload contract, distinct from the native app's
     # converter/container. Do not apply the app's SELF verifier to this payload.
     run([prefix / "usr/bin/ld.lld-18", "-m", "elf_x86_64", "-pie", "-T", sdk / "ldscripts/elf_x86_64.x",
          "--eh-frame-hdr", "-z", "max-page-size=0x4000", "-mllvm", "-emulated-tls", "--hash-style=gnu",
-         "--gc-sections", "-o", elf, obj, *([sdk / "target/lib/crt1.o"] if standard_runtime else crt_objects),
+         "--gc-sections", "-o", elf, *helper_objects,
+         *([sdk / "target/lib/crt1.o"] if standard_runtime else crt_objects),
          "-L", sdk / "target/lib", "-lc", "-lkernel_web",
          "-lSceLibcInternal", "-lSceNet", "-lSceSystemService", "-lSceUserService"], env=env)
     raw = elf.read_bytes()
@@ -131,6 +142,8 @@ def main(standard_runtime=False):
     require(raw.count(b"ISSHELF_EXACT_ORIGIN_CLOSE_V1") == 1 and
             "sceLncUtilKillApp" in imports,
             "Exact-origin close marker or strong import differs")
+    require(raw.count(b"ISSHELF_IN_APP_UPDATER_V1") == 1,
+            "The exact in-app update transaction marker is missing")
     require(inputs == {p.relative_to(ROOT).as_posix(): sha256(p) for p in tracked_inputs}, "Build input drift")
     result = {"elf": {"bytes": len(raw), "sha256": sha256(elf)}, "inputs": inputs,
               "hardwareTest": "not run", "transport": "not connected", "deployed": False,
@@ -141,7 +154,7 @@ def main(standard_runtime=False):
               "permissionChanges": standard_runtime,
               "crtPatchHook": ("Unmodified pinned SDK startup; targets helper process capabilities and syscall bounds"
                                if standard_runtime else "verified return 0; SDK patch.c excluded; kernel write routines absent"),
-              "policy": "cooperative Shelf closure; after five stuck committed seconds, one exact PPSA99541 origin close; one selected SystemService launch, or after a 3 s post-close settle and a read-only fixed-loopback readiness window of at most 8 s, one fixed tile uninstall, one bounded owned-title removal/artwork batch, or the complete ordered PPSA99700..PPSA99751 residual sweep; readiness polling continuously proves no foreground app and sends no HTTP request; authorization is rechecked before the first mutation; residual cleanup first proves the manual list excludes every protected slot and preflights every global registration as absent or exact platform-owned isShelf identity and artwork before any uninstall; maintenance is paced at 1000 ms and followed by one scan; maintenance retries only the same title after an exact game_active or scanner_busy receipt, five continuous idle seconds, and no observed big app, with at most five retries per title; long maintenance may update only its exact nonce-and-issued status owner; read-only focus observation; no arbitrary process kill, launch retry or emulator-file writes",
+              "policy": "cooperative Shelf closure; after five stuck committed seconds, one exact PPSA99541 origin close; one selected SystemService launch, one exact owner-approved journalled isShelf program update with SHA-256 revalidation, executable-last commit and rollback, or after a 3 s post-close settle and a read-only fixed-loopback readiness window of at most 8 s, one fixed tile uninstall, one bounded owned-title removal/artwork batch, or the complete ordered PPSA99700..PPSA99751 residual sweep; readiness polling continuously proves no foreground app and sends no HTTP request; authorization is rechecked before the first mutation; residual cleanup first proves the manual list excludes every protected slot and preflights every global registration as absent or exact platform-owned isShelf identity and artwork before any uninstall; maintenance is paced at 1000 ms and followed by one scan; maintenance retries only the same title after an exact game_active or scanner_busy receipt, five continuous idle seconds, and no observed big app, with at most five retries per title; long maintenance may update only its exact nonce-and-issued status owner; read-only focus observation; no arbitrary process kill, launch retry or emulator-file writes",
               "exactOriginClose": {"titleId": "PPSA99541", "delayMs": 5000,
                                      "attempts": 1, "marker": "ISSHELF_EXACT_ORIGIN_CLOSE_V1"},
               "approvalForStandardRuntime": "required before console use" if standard_runtime else "not applicable"}

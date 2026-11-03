@@ -1671,6 +1671,47 @@ void keyboard(const UiState& state) {
     }
     text("Cross  Type     Square  Delete     Triangle  Clear     Options / Circle  Done", 384, 783, 22, muted);
 }
+void update_prompt(const UiState& state) {
+    if (state.update_prompt == UpdatePrompt::none) return;
+    rect(0, 0, width, height, {5, 7, 18, 190});
+    rounded(430, 286, 1060, 500, 28, {24, 27, 48, 252});
+    rounded(430, 286, 1060, 7, 3, purple);
+    const bool recovery = state.update_prompt == UpdatePrompt::recovery;
+    const bool preparing = state.update_prompt == UpdatePrompt::preparing;
+    centered(preparing ? "Preparing your update" : recovery ? "Resume interrupted update"
+                                                       : "isShelf update available",
+             960, 342, 34, white, true);
+    if (state.update_tag[0])
+        centered(state.update_tag, 960, 399, 23, purple, true);
+    centered(state.update_message[0] ? state.update_message :
+                 preparing ? "Downloading and verifying the official production package."
+                 : recovery ? "Your verified update files are still safe and ready to continue."
+                            : "A newer production build is ready.",
+             960, 451, 21, muted);
+    if (preparing) {
+        const int progress = std::max(0, std::min(100, state.update_progress));
+        rounded(570, 550, 780, 14, 7, {52, 55, 77, 255});
+        if (progress)
+            rounded(570, 550, std::max(8, 780 * progress / 100), 14, 7, purple);
+        char label[32];
+        std::snprintf(label, sizeof(label), "%d%%", progress);
+        centered(label, 960, 588, 22, white, true);
+        centered("Circle cancels safely. You can resume this update later.", 960, 670, 20, muted);
+        return;
+    }
+    centered(recovery ? "Continue the exact verified update, or leave it for another time."
+                      : "isShelf will close, install safely, and reopen.",
+             960, 502, 20, muted);
+    centered("Settings, emulators, games, BIOS, saves and personal artwork stay untouched.",
+             960, 538, 18, muted);
+    const SDL_Color selected{92, 66, 150, 255};
+    const SDL_Color idle{43, 46, 68, 255};
+    rounded(560, 624, 360, 82, 18, state.update_focus == 0 ? selected : idle);
+    rounded(1000, 624, 360, 82, 18, state.update_focus == 1 ? selected : idle);
+    centered(recovery ? "Resume update" : "Update now", 740, 647, 23, white, true);
+    centered("Later", 1180, 647, 23, white, true);
+    centered("Use left/right and Cross to choose", 960, 739, 17, muted);
+}
 } // namespace
 
 SDL_Texture* build_room_background(const char* image_name) {
@@ -1795,7 +1836,7 @@ void graphics_render(const UiState& state, unsigned time_ms, bool animate) {
             picture(icon_files[static_cast<std::size_t>(state.settings.preferences.icon)], brand_x, 30, 50, 50);
             text("isShelf", brand_x + 67, 36, 29, white, true);
             if (state.ui_test_active)
-                text("UI TEST CONTROL / L3 + R3 TO STOP", 1260, 42, 18, purple, true);
+                text("REMOTE SUPPORT ACTIVE / L3 + R3 TO STOP", 1170, 42, 18, purple, true);
             else {
 #ifdef SHELF_PS5
                 text("PS5 / DEVELOPMENT BUILD", 1388, 42, 18, muted, true);
@@ -1826,6 +1867,7 @@ void graphics_render(const UiState& state, unsigned time_ms, bool animate) {
             rounded(300, 931, 1320, 64, 16, {57, 46, 84, 255});
             centered(state.notice, 960, 948, 24, white);
         }
+        update_prompt(state);
     }
     if (state.presentation.loading)
         splash(1, time_ms, true, state.presentation.appear, state.settings.preferences.icon);

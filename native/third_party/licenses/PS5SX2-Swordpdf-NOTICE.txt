@@ -1,0 +1,16 @@
+isShelf includes and adapts PS5 HTTPS/update implementation work from PS5SX2.
+
+Copyright (C) 2026 swordpdf
+Source: https://github.com/Swordpdf/PS5SX2
+Pinned source revision: b2a886b48739395de675377b03ecce75ab3368a8
+Imported components:
+- ps5/dischelper/https/fe_https.cpp and fe_https.h
+- ps5/dischelper/https/fe_https_ps5.cpp and ps5/installer/src/net.c (adapted platform layer)
+- ps5/third_party/mbedtls/port/ps5sx2_mbedtls_config.h
+- ps5/third_party/mbedtls/port/ps5sx2_mbedtls_platform.c
+- ps5/installer/ca/cacert.pem
+- ps5/coreorbis/orbis-shims/ehframe.ld (adapted linker bounds only)
+
+License: GPL-3.0-or-later. The full GNU GPL version 3 text is supplied as
+LICENSE at the root of the isShelf package. Modifications remain available in
+the matching isShelf source-and-relink archive.

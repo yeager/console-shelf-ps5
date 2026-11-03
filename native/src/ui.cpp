@@ -362,6 +362,26 @@ void input(UiState& state, Action action) {
     // navigation cannot route this sensitive view into Settings or search.
     if (state.page == Page::pairing_code)
         return;
+    if (state.update_prompt != UpdatePrompt::none) {
+        state.close_hint_requested = false;
+        if (state.update_prompt == UpdatePrompt::preparing) {
+            if (action == Action::back) state.update_cancel_requested = true;
+            return;
+        }
+        if (action == Action::left || action == Action::up)
+            state.update_focus = 0;
+        else if (action == Action::right || action == Action::down)
+            state.update_focus = 1;
+        else if (action == Action::confirm) {
+            if (state.update_focus == 0)
+                state.update_accept_requested = true;
+            else
+                state.update_prompt = UpdatePrompt::none;
+        } else if (action == Action::back || action == Action::settings) {
+            state.update_prompt = UpdatePrompt::none;
+        }
+        return;
+    }
     state.notice[0] = 0;
     state.close_hint_requested = false;
     if (state.page == Page::keyboard) {

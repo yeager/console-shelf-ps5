@@ -60,6 +60,18 @@ reject("required-visibility-import-weak", lambda b: b.__setitem__(visibility_sym
 reject("required-visibility-import-missing", lambda b: b.__setitem__(visibility_name, ord("X")))
 self_close_marker = original.index(b"ISSHELF_EXACT_SELF_CLOSE_V1")
 reject("exact-self-close-marker-missing", lambda b: b.__setitem__(self_close_marker, ord("X")))
+update_marker = original.index(b"ISSHELF_IN_APP_UPDATE_CLIENT_V1")
+reject("update-client-marker-missing", lambda b: b.__setitem__(update_marker, ord("X")))
+owner_support_marker = original.index(b"ISSHELF_OWNER_SUPPORT_CONTROL_V1")
+reject("owner-support-marker-missing", lambda b: b.__setitem__(owner_support_marker, ord("X")))
+for update_name in ("aligned_alloc", "poll", "sceNetPoolCreate", "read", "write"):
+    update_import = original.index((public_nid(update_name) + "#").encode(),
+                                   strings, strings + tags[10])
+    reject("update-client-" + update_name + "-missing",
+           lambda b, offset=update_import: b.__setitem__(offset, ord("X")))
+for static_name in ("__cxa_guard_acquire", "__cxa_guard_release", "strcasecmp",
+                    "dlopen", "dlsym", "dlclose", "dlerror"):
+    assert (public_nid(static_name) + "#").encode() not in original[strings:strings + tags[10]]
 for self_close_name in ("sceLncUtilInitialize", "sceLncUtilGetAppIdOfRunningBigApp",
                         "sceLncUtilGetAppTitleId", "sceLncUtilKillApp"):
     self_close_import = original.index((public_nid(self_close_name) + "#").encode(),
@@ -80,7 +92,7 @@ for private_name in ("open", "read", "write", "fchmod"):
         reject("private-" + private_name + "-missing",
                lambda b, offset=private_import: b.__setitem__(offset, ord("X")))
         private_import_fixtures += 1
-    elif private_name == "open":
+    elif private_name in ("open", "read", "write"):
         assert encoded in original[strings:strings + tags[10]]
     else:
         assert encoded not in original[strings:strings + tags[10]]
@@ -136,7 +148,7 @@ except ValueError:
     pass
 else:
     raise RuntimeError("Verifier accepted a SELF changed after container validation")
-fixture_count = (22 + private_import_fixtures + identity_import_fixtures +
+fixture_count = (29 + private_import_fixtures + identity_import_fixtures +
                  (1 if ps2_action >= 0 else 0) + (2 if direct_action >= 0 else 0) +
                  (3 if owned_marker >= 0 else 0))
 print(f"PASS: PS5 verifier rejects {fixture_count} damaged/foreign fixtures and enforces the selected public/private import contract without modifying the original executable.")

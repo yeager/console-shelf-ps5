@@ -1,6 +1,6 @@
 {
   "name": "isshelf",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": false,
   "description": "isShelf by Iswebro — a console-first PS5 homebrew library",
   "author": "Iswebro",
@@ -29,6 +29,7 @@
     "build:ps5-launch-helper-restricted": "node tools/build-ps5.js build_launch_helper.py",
     "build:ps5-tile-forwarder": "node tools/build-ps5.js console_tile_forwarder_v2/build.py",
     "test:ps5-platform": "node tools/build-ps5.js test_ps5_platform.py",
+    "test:update-helper": "node tools/build-ps5.js test_update_helper.py",
     "verify:ps5": "node tools/build-ps5.js verify_ps5_build.py",
     "test:ps5-verifier": "node tools/build-ps5.js test_ps5_verifier.py",
     "test:ps5-release-inputs": "node tools/build-ps5.js test_ps5_release_inputs.py",

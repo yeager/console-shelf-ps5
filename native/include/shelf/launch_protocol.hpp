@@ -3,6 +3,7 @@
 // filesystem operations live here; the payload/app integration is separate.
 #pragma once
 #include "tile_residual_guard.hpp"
+#include "update_protocol.hpp"
 #include <array>
 #include <cstdint>
 #include <cstdio>
@@ -22,9 +23,11 @@ enum class LaunchMode {
     tile_refresh,
     tile_remove,
     tile_residual,
+    self_update,
+    update_recover,
 };
 struct LaunchRequest {
-    char id[33]{}, title[10]{}, rom[768]{}, core[64]{};
+    char id[33]{}, title[10]{}, rom[768]{}, core[65]{};
     std::uint64_t issued = 0;
     LaunchMode mode = LaunchMode::emulator_menu;
 };
@@ -170,12 +173,19 @@ inline bool launch_psswan_path(std::string_view path) {
 }
 inline bool launch_request_valid(const LaunchRequest& r, std::uint64_t now) {
     if (!launch_bounded(r.id) || !launch_bounded(r.title) || !launch_bounded(r.rom) || !launch_bounded(r.core) ||
-        std::strlen(r.id) != 32 || !launch_title_valid(r.title) || !r.issued || !now)
+        std::strlen(r.id) != 32 || !r.issued || !now)
         return false;
     for (char c : std::string_view(r.id))
         if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')))
             return false;
     if ((now >= r.issued && now - r.issued > 30) || (r.issued > now && r.issued - now > 2))
+        return false;
+    if (r.mode == LaunchMode::self_update || r.mode == LaunchMode::update_recover) {
+        unsigned version[3]{};
+        return std::strcmp(r.title, shelf_title_id) == 0 && update_semver(r.rom, version) &&
+               update_hex_sha256(r.core);
+    }
+    if (!launch_title_valid(r.title))
         return false;
     if (r.mode == LaunchMode::tile_uninstall)
         return launch_tile_title_valid(r.title) && !r.rom[0] && !r.core[0];
@@ -212,6 +222,10 @@ inline const char* launch_mode_name(LaunchMode mode) {
         return "tile-refresh";
     if (mode == LaunchMode::tile_residual)
         return "tile-residual";
+    if (mode == LaunchMode::self_update)
+        return "self-update";
+    if (mode == LaunchMode::update_recover)
+        return "update-recover";
     return mode == LaunchMode::native_title ? "native" : "invalid";
 }
 inline bool encode_launch_request(const LaunchRequest& request, std::uint64_t now, char* output, std::size_t capacity) {
@@ -273,6 +287,10 @@ inline bool parse_launch_request(std::string_view message, std::uint64_t now, La
         candidate.mode = LaunchMode::tile_refresh;
     else if (std::strcmp(mode, "tile-residual") == 0)
         candidate.mode = LaunchMode::tile_residual;
+    else if (std::strcmp(mode, "self-update") == 0)
+        candidate.mode = LaunchMode::self_update;
+    else if (std::strcmp(mode, "update-recover") == 0)
+        candidate.mode = LaunchMode::update_recover;
     else
         return false;
     if (!launch_request_valid(candidate, now))
@@ -684,7 +702,9 @@ inline HandoffResult cooperative_handoff(const LaunchRequest& request, const Han
     if (request.mode == LaunchMode::tile_uninstall ||
         request.mode == LaunchMode::tile_remove ||
         request.mode == LaunchMode::tile_refresh ||
-        request.mode == LaunchMode::tile_residual)
+        request.mode == LaunchMode::tile_residual ||
+        request.mode == LaunchMode::self_update ||
+        request.mode == LaunchMode::update_recover)
         return result == 0 ? HandoffResult::started : HandoffResult::refused;
     bool observed = false;
     for (unsigned i = 0; i < (result >= 0 ? 32u : 16u); ++i) {

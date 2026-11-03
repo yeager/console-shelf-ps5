@@ -1,0 +1,77 @@
+{
+  "repository": "https://github.com/Swordpdf/PS5SX2",
+  "revision": "b2a886b48739395de675377b03ecce75ab3368a8",
+  "copyright": "Copyright (C) 2026 swordpdf",
+  "license": "GPL-3.0-or-later",
+  "files": [
+    {
+      "local": "native/third_party/ps5sx2_https/fe_https.h",
+      "bytes": 5808,
+      "sha256": "00d91ecb933a6995506093b5b2452ed3d00d3afb3d94be0d69e4469cfe7819a5",
+      "upstream": "ps5/dischelper/https/fe_https.h",
+      "upstreamBytes": 5875,
+      "upstreamSha256": "94afb374685d1aac565998a7ac4e6ef28a81729132a597b1b67f163c9a7fb7c3",
+      "modified": true,
+      "changes": "LF normalization; isShelf host-policy callback"
+    },
+    {
+      "local": "native/third_party/ps5sx2_https/fe_https.cpp",
+      "bytes": 29155,
+      "sha256": "2e3bb992fe73f4eef35875f9cd369cb5a7be231d987e99201643374597296670",
+      "upstream": "ps5/dischelper/https/fe_https.cpp",
+      "upstreamBytes": 29198,
+      "upstreamSha256": "4c64ae0f4bb408ae51483e899b759651cb6107b0c980e22f5d5fec0650e1c087",
+      "modified": true,
+      "changes": "LF normalization; externally loaded roots; exact host policy and Content-Range/length checks"
+    },
+    {
+      "local": "native/third_party/ps5sx2_https/ps5sx2_mbedtls_config.h",
+      "bytes": 3387,
+      "sha256": "cfd1cdd5eaaacbfcd6e2229b7c040dab74deb95ca4a5bc2746c3cce9d4391e35",
+      "upstream": "ps5/third_party/mbedtls/port/ps5sx2_mbedtls_config.h",
+      "upstreamBytes": 3469,
+      "upstreamSha256": "be358eeaf530406e2afa7eeb45c04ec9fff5af3ed32cba62634ded93f12701db",
+      "modified": false,
+      "changes": "LF normalization only"
+    },
+    {
+      "local": "native/third_party/ps5sx2_https/ps5sx2_mbedtls_platform.c",
+      "bytes": 2300,
+      "sha256": "aed0e577e9ba01b568a72792c3093a4dcbd185a00c86dbaf9438f03e78383617",
+      "upstream": "ps5/third_party/mbedtls/port/ps5sx2_mbedtls_platform.c",
+      "upstreamBytes": 2359,
+      "upstreamSha256": "86e0d48a3d478668215491f4cdb8331029a7301694498aeae6161a4afa1bfd99",
+      "modified": false,
+      "changes": "LF normalization only"
+    },
+    {
+      "local": "native/third_party/ps5sx2_https/ehframe.ld",
+      "bytes": 500,
+      "sha256": "a8b612d3d6c777506ac71b78b1cd798b58e1bee4a50ac21bcff0c6e29b405a97",
+      "upstream": "ps5/coreorbis/orbis-shims/ehframe.ld",
+      "upstreamBytes": 755,
+      "upstreamSha256": "4b5e39b436ebaf5d1f5b0594358e12eb9df7816c4fa0ce785caf9a58d7b3ae3b",
+      "modified": true,
+      "changes": "Retains only the four libc++/libunwind frame-bound definitions"
+    },
+    {
+      "local": "native/ps5/platform/update_https_ps5.cpp",
+      "bytes": 6488,
+      "sha256": "655741cf700f91fbf34090e801245cafe37c7b0bcad86c11590b4331080df9e6",
+      "upstream": "ps5/dischelper/https/fe_https_ps5.cpp and ps5/installer/src/net.c",
+      "upstreamSha256": [
+        "db5cb46f2a4cb7b230fd493d1ece3f1f79eef1f64acc3b98b0d6e2abebf3fadd",
+        "9db839a1632681509a4b83eca140bd75801ccd3606b7a7ad10e7cd62d97ae416"
+      ],
+      "modified": true,
+      "changes": "Adapted socket connection, timeouts and three-source entropy into isShelf's fixed updater platform"
+    }
+  ],
+  "externalAsset": {
+    "localAtBuild": "assets/update-ca.pem",
+    "upstream": "ps5/installer/ca/cacert.pem",
+    "bytes": 216539,
+    "sha256": "da64603998ba72031241a425ed7e3873986d71de4f8912b9befef4d01108a22b",
+    "delivery": "Fetched from the pinned raw Git revision and copied into each verified app package"
+  }
+}

@@ -25,6 +25,8 @@ REQUIRED = {
     "LICENSE",
     "THIRD_PARTY.md",
 }
+PROGRAM_EXACT = {"eboot.bin", "LICENSE", "THIRD_PARTY.md", "START-HERE.md", "build-source.json"}
+PROGRAM_PREFIXES = ("assets/", "licenses/", "native/assets/fonts/", "sce_module/", "sce_sys/")
 
 
 def require(condition, message):
@@ -53,6 +55,12 @@ def safe_member(name):
             and "\\" not in name and not name.endswith("/"))
 
 
+def program_member(name):
+    """The in-app updater may replace program material, never personal data."""
+    return safe_member(name) and (name in PROGRAM_EXACT or any(
+        name.startswith(prefix) and len(name) > len(prefix) for prefix in PROGRAM_PREFIXES))
+
+
 def app_members(archive):
     names = archive.namelist()
     require(len(names) == len(set(names)), "Release ZIP has duplicate members")
@@ -71,6 +79,7 @@ def app_members(archive):
         require(isinstance(entry, dict), "Invalid app file entry")
         name = entry.get("path")
         require(safe_member(name), "Unsafe app file path")
+        require(program_member(name), "Release app contains a non-program or personal-data path")
         require(name not in expected, "Duplicate app path in manifest")
         require(isinstance(entry.get("bytes"), int) and entry["bytes"] >= 0,
                 "Invalid app file size")

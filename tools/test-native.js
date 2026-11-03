@@ -20,6 +20,8 @@ const uiBridgeTests = path.join(root, 'native/tests/ui_test_bridge_tests.cpp');
 const uiTestPreviewTests = path.join(root, 'native/tests/ui_test_preview_tests.cpp');
 const navigationTests = path.join(root, 'native/tests/navigation_tests.cpp');
 const launchTests = path.join(root, 'native/tests/launch_tests.cpp');
+const update = path.join(root, 'native/src/update.cpp');
+const updateTests = path.join(root, 'native/tests/update_tests.cpp');
 const consoleTileTests = path.join(root, 'native/tests/console_tile_intent_tests.cpp');
 const routePreferenceTests = path.join(root, 'native/tests/console_tile_route_preference_tests.cpp');
 const settingsRouteCodecTests = path.join(root, 'native/tests/console_tile_settings_route_codec_tests.cpp');
@@ -61,7 +63,7 @@ if (process.platform === 'win32') {
     if (/["%\r\n]/.test(value)) throw new Error('Unsupported character in compiler input path.');
     return `"${value}"`;
   };
-  const command = `call ${quoted(developerCommand)} -no_logo -arch=x64 -host_arch=x64 >nul && cl.exe /nologo /std:c++17 /EHsc /utf-8 /D_CRT_SECURE_NO_WARNINGS /W4 /WX /I${quoted(includes)} /I${quoted(path.join(root,'native/third_party'))} ${[source,settings,ui,uiBridge,tests,settingsTests,uiTests,pairingEntryTests,uiBridgeTests,uiTestPreviewTests,consoleTileStartupTests,consoleTileRelayTests,consoleTileForwarderConfigTests,navigationTests,launchTests,...librarySources,libraryTests].map(quoted).join(' ')} /Fe:model-tests.exe`;
+  const command = `call ${quoted(developerCommand)} -no_logo -arch=x64 -host_arch=x64 >nul && cl.exe /nologo /std:c++17 /EHsc /utf-8 /D_CRT_SECURE_NO_WARNINGS /W4 /WX /I${quoted(includes)} /I${quoted(path.join(root,'native/third_party'))} ${[source,settings,ui,uiBridge,update,tests,settingsTests,uiTests,pairingEntryTests,uiBridgeTests,uiTestPreviewTests,updateTests,consoleTileStartupTests,consoleTileRelayTests,consoleTileForwarderConfigTests,navigationTests,launchTests,...librarySources,libraryTests].map(quoted).join(' ')} /Fe:model-tests.exe`;
   run(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', `"${command}"`], { windowsVerbatimArguments: true });
   const consoleTileCommand = `call ${quoted(developerCommand)} -no_logo -arch=x64 -host_arch=x64 >nul && cl.exe /nologo /std:c++17 /EHsc /utf-8 /D_CRT_SECURE_NO_WARNINGS /W4 /WX /I${quoted(includes)} ${quoted(consoleTileTests)} /Fe:console-tile-tests.exe`;
   run(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', `"${consoleTileCommand}"`], { windowsVerbatimArguments: true });
@@ -82,7 +84,7 @@ if (process.platform === 'win32') {
   const createStateCommand = `call ${quoted(developerCommand)} -no_logo -arch=x64 -host_arch=x64 >nul && cl.exe /nologo /std:c++17 /EHsc /utf-8 /D_CRT_SECURE_NO_WARNINGS /W4 /WX /I${quoted(includes)} ${quoted(genericTileCreateStateTests)} /Fe:generic-tile-create-state-tests.exe`;
   run(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', `"${createStateCommand}"`], { windowsVerbatimArguments: true });
 } else {
-  run('c++', ['-std=c++17', '-pthread', '-Wall', '-Wextra', '-Werror', '-I', includes, '-I',path.join(root,'native/third_party'),source, settings, ui, uiBridge, tests, settingsTests, uiTests,pairingEntryTests,uiBridgeTests,uiTestPreviewTests,consoleTileStartupTests,consoleTileRelayTests,consoleTileForwarderConfigTests,navigationTests,launchTests,...librarySources,libraryTests,'-o', output]);
+  run('c++', ['-std=c++17', '-pthread', '-Wall', '-Wextra', '-Werror', '-I', includes, '-I',path.join(root,'native/third_party'),source, settings, ui, uiBridge, update, tests, settingsTests, uiTests,pairingEntryTests,uiBridgeTests,uiTestPreviewTests,updateTests,consoleTileStartupTests,consoleTileRelayTests,consoleTileForwarderConfigTests,navigationTests,launchTests,...librarySources,libraryTests,'-o', output]);
   run('c++', ['-std=c++17', '-Wall', '-Wextra', '-Werror', '-I', includes, consoleTileTests, '-o', consoleTileOutput]);
   run('c++', ['-std=c++17', '-Wall', '-Wextra', '-Werror', '-I', includes,
               routePreferenceTests, '-o', routePreferenceOutput]);

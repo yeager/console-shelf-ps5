@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "shelf/ui_test_bridge.hpp"
+#if !defined(SHELF_OWNER_SUPPORT_CONTROL) || defined(SHELF_UI_TEST_BRIDGE)
 #include "shelf/console_tile_job_root_probe.hpp"
+#else
+#define SHELF_PUBLIC_OWNER_SUPPORT
+#endif
 #include <cerrno>
 #include <cstdarg>
 #include <cstdio>
@@ -80,7 +84,10 @@ bool decimal(const char*& at, const char* end, std::uint64_t& value) {
     // A canonical decimal form makes accidental extra fields unambiguous.
     return !(at - first > 1 && *first == '0') && at != end && *at++ == ' ';
 }
-bool operation(const char* name, UiTestRequest& request) {
+bool operation(const char* name, UiTestRequest& request, bool private_diagnostics) {
+#ifdef SHELF_PUBLIC_OWNER_SUPPORT
+    (void)private_diagnostics;
+#endif
     if (std::strcmp(name, "snapshot") == 0) {
         request.operation = UiTestOperation::snapshot;
         return true;
@@ -93,54 +100,56 @@ bool operation(const char* name, UiTestRequest& request) {
         request.operation = UiTestOperation::close;
         return true;
     }
-    if (std::strcmp(name, "probe-paths") == 0) {
+#ifndef SHELF_PUBLIC_OWNER_SUPPORT
+    if (private_diagnostics && std::strcmp(name, "probe-paths") == 0) {
         request.operation = UiTestOperation::probe_paths;
         return true;
     }
-    if (std::strcmp(name, "probe-writes-v4") == 0) {
+    if (private_diagnostics && std::strcmp(name, "probe-writes-v4") == 0) {
         request.operation = UiTestOperation::probe_writes_v4;
         return true;
     }
-    if (std::strcmp(name, "probe-job-root") == 0) {
+    if (private_diagnostics && std::strcmp(name, "probe-job-root") == 0) {
         request.operation = UiTestOperation::probe_job_root;
         return true;
     }
-    if (std::strcmp(name, "create-job-root") == 0) {
+    if (private_diagnostics && std::strcmp(name, "create-job-root") == 0) {
         request.operation = UiTestOperation::create_job_root;
         return true;
     }
-    if (std::strcmp(name, "probe-app-source") == 0) {
+    if (private_diagnostics && std::strcmp(name, "probe-app-source") == 0) {
         request.operation = UiTestOperation::probe_app_source;
         return true;
     }
-    if (std::strcmp(name, "create-n64-source") == 0) {
+    if (private_diagnostics && std::strcmp(name, "create-n64-source") == 0) {
         request.operation = UiTestOperation::create_n64_source;
         return true;
     }
-    if (std::strcmp(name, "probe-ps2-source") == 0) {
+    if (private_diagnostics && std::strcmp(name, "probe-ps2-source") == 0) {
         request.operation = UiTestOperation::probe_ps2_source;
         return true;
     }
-    if (std::strcmp(name, "probe-ps2-direct") == 0) {
+    if (private_diagnostics && std::strcmp(name, "probe-ps2-direct") == 0) {
         request.operation = UiTestOperation::probe_ps2_direct;
         return true;
     }
-    if (std::strcmp(name, "probe-route-store") == 0) {
+    if (private_diagnostics && std::strcmp(name, "probe-route-store") == 0) {
         request.operation = UiTestOperation::probe_route_store;
         return true;
     }
-    if (std::strcmp(name, "probe-route-path") == 0) {
+    if (private_diagnostics && std::strcmp(name, "probe-route-path") == 0) {
         request.operation = UiTestOperation::probe_route_path;
         return true;
     }
-    if (std::strcmp(name, "probe-settings-path") == 0) {
+    if (private_diagnostics && std::strcmp(name, "probe-settings-path") == 0) {
         request.operation = UiTestOperation::probe_settings_path;
         return true;
     }
-    if (std::strcmp(name, "launch-confirm") == 0) {
+    if (private_diagnostics && std::strcmp(name, "launch-confirm") == 0) {
         request.operation = UiTestOperation::launch_confirm;
         return true;
     }
+#endif
     constexpr const char* names[] = {"up", "down", "left", "right", "confirm", "back", "settings", "layout",
                                       "favorite", "previous-tab", "tab"};
     constexpr Action actions[] = {Action::up, Action::down, Action::left, Action::right, Action::confirm,
@@ -155,7 +164,7 @@ bool operation(const char* name, UiTestRequest& request) {
     return false;
 }
 bool parse(const char* bytes, std::size_t size, const char* expected_session, std::uint64_t next,
-           UiTestRequest& request) {
+           bool private_diagnostics, UiTestRequest& request) {
     constexpr char prefix[] = "ISSHELF_UI_TEST_1 ";
     if (!size || size > request_limit || bytes[size - 1] != '\n' || size < sizeof(prefix) + 32 + 6)
         return false;
@@ -177,7 +186,7 @@ bool parse(const char* bytes, std::size_t size, const char* expected_session, st
     if (!remaining || remaining >= sizeof(value.name))
         return false;
     std::memcpy(value.name, at, remaining);
-    if (!operation(value.name, value))
+    if (!operation(value.name, value, private_diagnostics))
         return false;
     request = value;
     return true;
@@ -283,6 +292,10 @@ bool apply_ui_test_action(UiState& state, Action action) {
     return true;
 }
 bool apply_ui_test_launch_confirm(UiState& state) {
+#ifdef SHELF_PUBLIC_OWNER_SUPPORT
+    (void)state;
+    return false;
+#else
     if (state.launch_requested || state.launch_busy || state.exit_requested ||
         state.tile_requested || state.tile_busy || state.route_save_requested ||
         state.route_save_busy)
@@ -321,11 +334,16 @@ bool apply_ui_test_launch_confirm(UiState& state) {
         return false;
     state = candidate;
     return true;
+#endif
 }
-bool UiTestBridge::start(const char* data_root, const char* session32) {
+bool UiTestBridge::start(const char* data_root, const char* session32, bool private_diagnostics) {
     stop();
     session_[0] = directory_[0] = request_path_[0] = frame_new_path_[0] = 0;
-    if (!data_root || !*data_root || std::strlen(data_root) > 2000 || !valid_session(session32))
+    if (!data_root || !*data_root || std::strlen(data_root) > 2000 || !valid_session(session32)
+#ifdef SHELF_PUBLIC_OWNER_SUPPORT
+        || private_diagnostics
+#endif
+        )
         return false;
     for (const unsigned char* at = reinterpret_cast<const unsigned char*>(data_root); *at; ++at)
         if (*at < 32 || *at == 127)
@@ -343,6 +361,7 @@ bool UiTestBridge::start(const char* data_root, const char* session32) {
         return false;
     std::memcpy(session_, session32, sizeof(session_));
     next_sequence_ = 1;
+    private_diagnostics_ = private_diagnostics;
     enabled_ = true;
     return true;
 }
@@ -357,7 +376,8 @@ bool UiTestBridge::poll(UiTestRequest& request) {
     const auto size = std::fread(bytes, 1, sizeof(bytes), input);
     const bool okay = !std::ferror(input);
     const bool closed = std::fclose(input) == 0;
-    if (!okay || !closed || !parse(bytes, size, session_, next_sequence_, request))
+    if (!okay || !closed ||
+        !parse(bytes, size, session_, next_sequence_, private_diagnostics_, request))
         return false;
     ++next_sequence_;
     return true;
@@ -373,6 +393,17 @@ bool UiTestBridge::publish(const UiTestRequest& request, std::uint64_t revision,
                            const tile_route::SettingsPathReport* settings_path) {
     if (!session_[0] || !result_label(result))
         return false;
+#ifdef SHELF_PUBLIC_OWNER_SUPPORT
+    if (probe_bytes || probe_fnv || job_root || ps2_source || ps2_direct || route_store ||
+        route_path || settings_path)
+        return false;
+    const char* job_root_value = "null";
+    const char* ps2_value = "null";
+    const char* direct_value = "null";
+    const char* route_store_value = "null";
+    const char* route_path_value = "null";
+    const char* settings_path_value = "null";
+#else
     const bool source_probe = request.operation == UiTestOperation::probe_app_source;
     const bool n64_source = request.operation == UiTestOperation::create_n64_source;
     const bool payload_probe = request.operation == UiTestOperation::probe_paths ||
@@ -604,8 +635,10 @@ bool UiTestBridge::publish(const UiTestRequest& request, std::uint64_t revision,
         if (length <= 0 || static_cast<std::size_t>(length) >= sizeof(job_root_json)) return false;
         job_root_value = job_root_json;
     }
+#endif
     UiTestRequest checked;
-    if (!std::memchr(request.name, 0, sizeof(request.name)) || !operation(request.name, checked))
+    if (!std::memchr(request.name, 0, sizeof(request.name)) ||
+        !operation(request.name, checked, private_diagnostics_))
         return false;
     char frame[2304], response[2304], pending[2304];
     if (!path(frame, directory_, "ui-test-frame.png") || !path(response, directory_, "ui-test-response.json") ||

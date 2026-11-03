@@ -3,7 +3,7 @@
 const { spawnSync } = require('node:child_process');
 const path = require('node:path');
 const selected = process.argv[2] || 'build_ps5.py';
-if (!['build_ps5.py', 'test_ps5_platform.py', 'verify_ps5_build.py', 'test_ps5_verifier.py', 'test_ps5_release_inputs.py', 'test_normalize_legacy_console_tiles_private.py', 'prepare_ps5_test.py', 'prepare_corresponding_source.py', 'relink_ps5.py', 'prepare_ps5_source_kit.py', 'prepare_ps5_release.py', 'build_launch_helper.py', 'console_tile_forwarder_v2/build.py', 'remote_close_retroarch_v1/build.py', 'remote_close_emulator_targets_v1/build.py', 'foreground_title_probe_v1/build.py'].includes(selected)) throw new Error('Unknown PS5 build task.');
+if (!['build_ps5.py', 'test_ps5_platform.py', 'test_update_helper.py', 'verify_ps5_build.py', 'test_ps5_verifier.py', 'test_ps5_release_inputs.py', 'test_normalize_legacy_console_tiles_private.py', 'prepare_ps5_test.py', 'prepare_corresponding_source.py', 'relink_ps5.py', 'prepare_ps5_source_kit.py', 'prepare_ps5_release.py', 'build_launch_helper.py', 'console_tile_forwarder_v2/build.py', 'remote_close_retroarch_v1/build.py', 'remote_close_emulator_targets_v1/build.py', 'foreground_title_probe_v1/build.py'].includes(selected)) throw new Error('Unknown PS5 build task.');
 const script = path.resolve(__dirname, selected);
 let command = 'python3', args = [script, ...process.argv.slice(3)];
 if (process.platform === 'win32') {
