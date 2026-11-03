@@ -6,7 +6,7 @@
   </a>
 </p>
 
-> **☕ Tip Iswebro — only if you’d like to.**
+> **☕ Buy Iswebro a Coffee! Only if you’d like to.**
 >
 > If isShelf is useful to you, you can [support the next update on Ko-fi](https://ko-fi.com/iswebro). Tips help with development, testing, documentation and release work. There’s no pressure: sharing the project, trying it out and sending feedback help just as much.
 
