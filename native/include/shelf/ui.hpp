@@ -73,6 +73,10 @@ struct UiState {
     bool shortcut_route_ready = false;
     int game_focus = 0;
     bool tools = false, keyboard_for_consoles = false, changed = false, exit_requested = false;
+    // True only while the bounded background inventory scan is still running.
+    // If its opening grace expires, Home renders an honest discovery state
+    // instead of looking like the owner's consoles disappeared.
+    bool library_discovering = false;
     bool keyboard_for_tv = false;
     bool launch_connected = false, launch_requested = false, launch_busy = false;
     bool tile_connected = false, tile_requested = false, tile_busy = false, tile_batch_busy = false;

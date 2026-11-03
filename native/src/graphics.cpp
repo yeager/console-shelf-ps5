@@ -1024,10 +1024,15 @@ void home(const UiState& state) {
                   sorts[static_cast<std::size_t>(p.sort)].data(), shown.count);
     text(summary, room ? 192 : 84, summary_y, 20, room ? SDL_Color{190, 205, 196, 255} : muted);
     if (!shown.count) {
-        centered("Your shelf is ready for your choices", 960, 620, 42, white, true);
-        centered(p.layout == Layout::shelf && p.shelf_single ? "Choose up to 8 consoles in Settings > Consoles." :
-                 p.scope == Scope::favorites ? "Add favourites with Triangle, or change the view in Settings." :
-                 "Choose All consoles or enable systems in settings.", 960, 679, 26, muted);
+        if (state.library_discovering) {
+            centered("Finding your emulators and games", 960, 620, 42, white, true);
+            centered("Your systems will appear here as soon as discovery finishes.", 960, 679, 26, muted);
+        } else {
+            centered("Your shelf is ready for your choices", 960, 620, 42, white, true);
+            centered(p.layout == Layout::shelf && p.shelf_single ? "Choose up to 8 consoles in Settings > Consoles." :
+                     p.scope == Scope::favorites ? "Add favourites with Triangle, or change the view in Settings." :
+                     "Choose All consoles or enable systems in settings.", 960, 679, 26, muted);
+        }
         footer("Cross  Choose consoles    Options  Settings    Circle  Back");
         return;
     }

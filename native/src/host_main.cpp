@@ -142,6 +142,7 @@ void accept_library(shelf::UiState& state, shelf::Library& library, shelf::ReadO
     const bool preserve_selected_surface = state.page != shelf::Page::home &&
                                            state.selected_system < shelf::system_count;
     const auto selected_surface = state.selected_system;
+    state.library_discovering = false;
     state.library = &library;
     state.inventory = library.inventory;
     startup(library.scan.complete ? "library scan complete" : "library scan partial");
@@ -988,8 +989,10 @@ int main(int argc, char** argv) {
             accept_library(state, *library.value, ftp, scan_only);
             if (scan_only)
                 return library.value->scan.complete ? 0 : 2;
-        } else
+        } else {
             state.presentation.loading = true;
+            state.library_discovering = true;
+        }
     } else if (scan_only)
         return 1;
     const auto loaded = shelf::load_settings(settings_path, state.settings);
@@ -1101,6 +1104,7 @@ int main(int argc, char** argv) {
     shelf::OpeningGate opening_gate;
     bool intro_started = !automatic_intro, previous_visible = false;
     bool visibility_sampled = false, frame_acknowledged = false, opening_logged = false;
+    bool opening_inventory_fallback_logged = false;
     int last_visibility_status = 0;
     unsigned last_visibility_flags = 0, visibility_notes = 0;
     unsigned visible_time = 0, last_visibility_at = opened_at;
@@ -1699,11 +1703,16 @@ int main(int argc, char** argv) {
             redraw = true;
         }
 #endif
-        // The UI opening is never held hostage by FTP/library discovery. The
-        // scan may finish later and publish its inventory into the live Home
-        // screen, but controls reveal on their own bounded presentation clock.
+        // A normal scan publishes inventory before Home is revealed, so an
+        // installed/favourites view never looks empty for a few seconds. The
+        // bounded fallback still exposes responsive controls if FTP is slow or
+        // unavailable; Home then labels discovery honestly until it completes.
         if (automatic_intro && state.presentation.loading && opening_prepared && intro_started &&
-            visual_now - visual_start >= 1100) {
+            shelf::opening_inventory_ready(library_accepted, visual_now - visual_start)) {
+            if (!library_accepted && !opening_inventory_fallback_logged) {
+                opening_inventory_fallback_logged = true;
+                startup("opening inventory fallback", "scan still running after 6000 ms foreground time");
+            }
             state.presentation.loading = false;
             state.presentation.reveal = 0;
             reveal_pending = true;

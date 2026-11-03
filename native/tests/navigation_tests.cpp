@@ -70,6 +70,15 @@ void test_navigation() {
     wrapped_opening.sample(0xffffffc0u, 0, 0);
     check(!wrapped_opening.ready(0x37u) && wrapped_opening.ready(0x38u), "opening gate handles timer wrap");
     std::puts("PASS: foreground opening gate, owner escape, overlay pause, unavailable-status fallback and timer wrap.");
+    check(!opening_inventory_ready(false, opening_inventory_min_ms - 1) &&
+              !opening_inventory_ready(true, opening_inventory_min_ms - 1),
+          "opening keeps its minimum branded loading interval even when discovery is fast");
+    check(opening_inventory_ready(true, opening_inventory_min_ms),
+          "completed discovery reveals an already-populated Home after the minimum interval");
+    check(!opening_inventory_ready(false, opening_inventory_timeout_ms - 1) &&
+              opening_inventory_ready(false, opening_inventory_timeout_ms),
+          "slow discovery keeps the loading screen before a bounded responsive fallback");
+    std::puts("PASS: inventory-aware opening avoids an empty Home without allowing discovery to trap controls.");
     LaunchVisibilityGate launch_visibility;
     check(launch_visibility.sample(100, 0, 1) == LaunchVisibilityDecision::wait &&
               launch_visibility.sample(1000, 0, 0) == LaunchVisibilityDecision::wait &&

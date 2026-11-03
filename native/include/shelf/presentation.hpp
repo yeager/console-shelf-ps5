@@ -6,7 +6,13 @@ namespace shelf {
 inline constexpr std::uint32_t close_hold_ms = 3000;
 inline constexpr std::uint32_t opening_entrance_ms = 360;
 inline constexpr std::uint32_t opening_reveal_ms = 520;
+inline constexpr std::uint32_t opening_inventory_min_ms = 1100;
+inline constexpr std::uint32_t opening_inventory_timeout_ms = 6000;
 inline constexpr std::uint32_t close_fade_ms = 240;
+inline constexpr bool opening_inventory_ready(bool library_ready, std::uint32_t visible_ms) {
+    return visible_ms >= opening_inventory_min_ms &&
+           (library_ready || visible_ms >= opening_inventory_timeout_ms);
+}
 // Only the hardware layer moves. The room and wood are rendered separately.
 class ShelfPageMotion {
     static constexpr float duration_ms = 260.f;
