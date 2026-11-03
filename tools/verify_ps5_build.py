@@ -126,7 +126,8 @@ def verify_recorded_hashes(folder):
                     "eboot.bin": "0755", "sce_module/libc.prx": "0755",
                     "otherManifestFiles": "0644", "durable": True,
                     "verifiedAfterInstall": True,
-                    "marker": "ISSHELF_UPDATE_PROGRAM_MODES_V1"},
+                    "method": "fchmod-open-file-descriptor",
+                    "marker": "ISSHELF_UPDATE_PROGRAM_MODES_V2"},
                 "Embedded helper executable-mode contract differs")
         require(helper.get("updateDebugNotifications") == {
                     "style": "kernel-text", "downloadPercent": [25, 50, 75],
@@ -135,7 +136,7 @@ def verify_recorded_hashes(folder):
                     "marker": "ISSHELF_UPDATE_DEBUG_NOTICES_V1"},
                 "Embedded helper update-notification contract differs")
         require(data.count(b"ISSHELF_EXACT_UPDATE_RELAUNCH_V4") == 1 and
-                data.count(b"ISSHELF_UPDATE_PROGRAM_MODES_V1") == 1 and
+                data.count(b"ISSHELF_UPDATE_PROGRAM_MODES_V2") == 1 and
                 data.count(b"Please don't open anything for %u seconds;") == 1,
                 "Embedded helper lacks updater relaunch or executable-mode evidence")
     private_probe = recorded.get("embeddedConsoleTilePathProbe")

@@ -145,8 +145,10 @@ def main(standard_runtime=False):
             "Exact-origin close marker or strong import differs")
     require(raw.count(b"ISSHELF_IN_APP_UPDATER_V1") == 1,
             "The exact in-app update transaction marker is missing")
-    require(raw.count(b"ISSHELF_UPDATE_PROGRAM_MODES_V1") == 1,
+    require(raw.count(b"ISSHELF_UPDATE_PROGRAM_MODES_V2") == 1,
             "The exact updater executable-mode contract marker is missing")
+    require("fchmod" in imports and "chmod" not in imports,
+            "Updater modes must use the hardware-proven open-descriptor fchmod path")
     require(raw.count(b"ISSHELF_EXACT_UPDATE_RELAUNCH_V4") == 1 and
             "sceLncUtilLaunchApp" in imports,
             "The single-request exact-title updater relaunch marker or import differs")
@@ -177,7 +179,8 @@ def main(standard_runtime=False):
               "updateProgramModes": {"eboot.bin": "0755", "sce_module/libc.prx": "0755",
                                      "otherManifestFiles": "0644", "durable": True,
                                      "verifiedAfterInstall": True,
-                                     "marker": "ISSHELF_UPDATE_PROGRAM_MODES_V1"},
+                                     "method": "fchmod-open-file-descriptor",
+                                     "marker": "ISSHELF_UPDATE_PROGRAM_MODES_V2"},
               "updateDebugNotifications": {"style": "kernel-text", "downloadPercent": [25, 50, 75],
                                              "helperStages": ["verify", "recover", "install", "restore", "finish", "relaunch"],
                                              "idleWarningSeconds": 35,

@@ -23,7 +23,7 @@ namespace {
 [[gnu::used]] const char update_transaction_marker[] =
     "ISSHELF_IN_APP_UPDATER_V1";
 [[gnu::used]] const char update_program_modes_marker[] =
-    "ISSHELF_UPDATE_PROGRAM_MODES_V1";
+    "ISSHELF_UPDATE_PROGRAM_MODES_V2";
 constexpr char manifest_path[] = SHELF_UPDATE_DATA_ROOT "/update/ready.manifest";
 constexpr char manifest_temporary[] = SHELF_UPDATE_DATA_ROOT "/update/installed.manifest.tmp";
 constexpr char installed_manifest[] = SHELF_UPDATE_DATA_ROOT "/update/installed.manifest";
@@ -94,10 +94,14 @@ bool sync_parent(const char* name) {
     return okay;
 }
 bool set_mode_durable(const char* name, mode_t expected) {
-    if (chmod(name, expected) != 0) return false;
     const int descriptor = open(name, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
     if (descriptor < 0) return false;
-    bool okay = fsync(descriptor) == 0;
+    bool okay = fchmod(descriptor, expected) == 0;
+    if (okay) okay = fsync(descriptor) == 0;
+    struct stat info{};
+    if (okay)
+        okay = fstat(descriptor, &info) == 0 && S_ISREG(info.st_mode) &&
+               (info.st_mode & 0777) == expected;
     okay = close(descriptor) == 0 && okay;
     return okay && mode_matches(name, expected);
 }
