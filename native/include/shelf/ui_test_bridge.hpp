@@ -72,8 +72,9 @@ struct UiTestRouteStoreReport {
     std::uint64_t uid = 0, euid = 0;
     int system_error = 0;
 };
-// Trial the same UI transition used by physical input, and refuse any action
-// that would leave the app. Refused actions do not mutate the live state.
+// Trial the same UI transition used by physical input. Public owner support
+// also keeps tile mutation and updater approval on the physical controller.
+// Refused actions do not mutate the live state.
 bool apply_ui_test_action(UiState& state, Action action);
 // Separate one-shot path for a currently selected emulator menu or an exact
 // queued-removal handoff. Ordinary remote Confirm remains unable to launch or

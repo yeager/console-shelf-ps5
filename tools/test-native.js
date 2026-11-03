@@ -17,6 +17,7 @@ const pairingEntryTests = path.join(root, 'native/tests/pairing_code_entry_tests
 const quarantineTests = path.join(root, 'native/tests/console_tile_quarantine_ps5_tests.cpp');
 const uiBridge = path.join(root, 'native/src/ui_test_bridge.cpp');
 const uiBridgeTests = path.join(root, 'native/tests/ui_test_bridge_tests.cpp');
+const publicOwnerSupportTests = path.join(root, 'native/tests/ui_test_public_owner_support_tests.cpp');
 const uiTestPreviewTests = path.join(root, 'native/tests/ui_test_preview_tests.cpp');
 const navigationTests = path.join(root, 'native/tests/navigation_tests.cpp');
 const launchTests = path.join(root, 'native/tests/launch_tests.cpp');
@@ -38,6 +39,7 @@ const includes = path.join(root, 'native/include');
 const librarySources = ['library.cpp','artwork_sources.cpp','filesystem.cpp','metadata.cpp','json.c'].map(file=>path.join(root,'native/src',file));
 const libraryTests = path.join(root, 'native/tests/library_tests.cpp');
 const output = path.join(build, process.platform === 'win32' ? 'model-tests.exe' : 'model-tests');
+const publicOwnerSupportOutput = path.join(build, process.platform === 'win32' ? 'public-owner-support-tests.exe' : 'public-owner-support-tests');
 const consoleTileOutput = path.join(build, process.platform === 'win32' ? 'console-tile-tests.exe' : 'console-tile-tests');
 const routePreferenceOutput = path.join(build, process.platform === 'win32' ? 'console-tile-route-preference-tests.exe' : 'console-tile-route-preference-tests');
 const settingsRouteCodecOutput = path.join(build, process.platform === 'win32' ? 'console-tile-settings-route-codec-tests.exe' : 'console-tile-settings-route-codec-tests');
@@ -65,6 +67,8 @@ if (process.platform === 'win32') {
   };
   const command = `call ${quoted(developerCommand)} -no_logo -arch=x64 -host_arch=x64 >nul && cl.exe /nologo /std:c++17 /EHsc /utf-8 /D_CRT_SECURE_NO_WARNINGS /W4 /WX /I${quoted(includes)} /I${quoted(path.join(root,'native/third_party'))} ${[source,settings,ui,uiBridge,update,tests,settingsTests,uiTests,pairingEntryTests,uiBridgeTests,uiTestPreviewTests,updateTests,consoleTileStartupTests,consoleTileRelayTests,consoleTileForwarderConfigTests,navigationTests,launchTests,...librarySources,libraryTests].map(quoted).join(' ')} /Fe:model-tests.exe`;
   run(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', `"${command}"`], { windowsVerbatimArguments: true });
+  const publicOwnerSupportCommand = `call ${quoted(developerCommand)} -no_logo -arch=x64 -host_arch=x64 >nul && cl.exe /nologo /std:c++17 /EHsc /utf-8 /D_CRT_SECURE_NO_WARNINGS /DSHELF_OWNER_SUPPORT_CONTROL /W4 /WX /I${quoted(includes)} /I${quoted(path.join(root,'native/third_party'))} ${[source,settings,ui,uiBridge,update,...librarySources,publicOwnerSupportTests].map(quoted).join(' ')} /Fe:public-owner-support-tests.exe`;
+  run(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', `"${publicOwnerSupportCommand}"`], { windowsVerbatimArguments: true });
   const consoleTileCommand = `call ${quoted(developerCommand)} -no_logo -arch=x64 -host_arch=x64 >nul && cl.exe /nologo /std:c++17 /EHsc /utf-8 /D_CRT_SECURE_NO_WARNINGS /W4 /WX /I${quoted(includes)} ${quoted(consoleTileTests)} /Fe:console-tile-tests.exe`;
   run(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', `"${consoleTileCommand}"`], { windowsVerbatimArguments: true });
   const routePreferenceCommand = `call ${quoted(developerCommand)} -no_logo -arch=x64 -host_arch=x64 >nul && cl.exe /nologo /std:c++17 /EHsc /utf-8 /D_CRT_SECURE_NO_WARNINGS /W4 /WX /I${quoted(includes)} ${quoted(routePreferenceTests)} /Fe:console-tile-route-preference-tests.exe`;
@@ -85,6 +89,9 @@ if (process.platform === 'win32') {
   run(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', `"${createStateCommand}"`], { windowsVerbatimArguments: true });
 } else {
   run('c++', ['-std=c++17', '-pthread', '-Wall', '-Wextra', '-Werror', '-I', includes, '-I',path.join(root,'native/third_party'),source, settings, ui, uiBridge, update, tests, settingsTests, uiTests,pairingEntryTests,uiBridgeTests,uiTestPreviewTests,updateTests,consoleTileStartupTests,consoleTileRelayTests,consoleTileForwarderConfigTests,navigationTests,launchTests,...librarySources,libraryTests,'-o', output]);
+  run('c++', ['-std=c++17', '-pthread', '-Wall', '-Wextra', '-Werror', '-DSHELF_OWNER_SUPPORT_CONTROL', '-I', includes,
+              '-I', path.join(root,'native/third_party'), source, settings, ui, uiBridge, update, ...librarySources,
+              publicOwnerSupportTests, '-o', publicOwnerSupportOutput]);
   run('c++', ['-std=c++17', '-Wall', '-Wextra', '-Werror', '-I', includes, consoleTileTests, '-o', consoleTileOutput]);
   run('c++', ['-std=c++17', '-Wall', '-Wextra', '-Werror', '-I', includes,
               routePreferenceTests, '-o', routePreferenceOutput]);
@@ -107,6 +114,7 @@ if (process.platform === 'win32') {
               genericTileCreateStateTests, '-o', genericTileCreateStateOutput]);
 }
 run(output, []);
+run(publicOwnerSupportOutput, []);
 run(consoleTileOutput, []);
 run(routePreferenceOutput, []);
 run(settingsRouteCodecOutput, []);

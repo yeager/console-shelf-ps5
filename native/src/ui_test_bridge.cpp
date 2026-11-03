@@ -284,6 +284,13 @@ bool result_label(const char* value) {
 bool apply_ui_test_action(UiState& state, Action action) {
     UiState candidate = state;
     input(candidate, action);
+#ifdef SHELF_PUBLIC_OWNER_SUPPORT
+    // L3 + R3 grants bounded menu help, not approval for persistent Home
+    // changes or an update/recovery handoff. Physical input still calls input()
+    // directly, and the private diagnostic build keeps its separate capability.
+    if (candidate.tile_requested || candidate.update_accept_requested)
+        return false;
+#endif
     if (candidate.launch_requested || candidate.exit_requested ||
         (candidate.route_save_requested && candidate.route_save_apply_after &&
          candidate.pending_route_save.destination == ConsoleTileDestination::emulator))

@@ -607,6 +607,18 @@ void test_ui_test_bridge() {
           "remote Back never simulates a hold-to-close");
     check(apply_ui_test_action(home, Action::settings) && home.page == Page::settings,
           "ordinary UI transitions remain available");
+    UiState private_tile;
+    private_tile.page = Page::console_tile;
+    private_tile.selected_system = find_system("ps1");
+    private_tile.tile_connected = true;
+    check(apply_ui_test_action(private_tile, Action::confirm) && private_tile.tile_requested &&
+              private_tile.pending_tile.action == ConsoleTileAction::upsert,
+          "private diagnostics retain ordinary Confirm for an explicit tile fixture");
+    UiState private_update;
+    private_update.update_prompt = UpdatePrompt::available;
+    check(apply_ui_test_action(private_update, Action::confirm) &&
+              private_update.update_accept_requested,
+          "private diagnostics retain ordinary Confirm for an explicit update fixture");
     static Library library;
     const auto ps1 = find_system("ps1");
     library.route_count = 1;
