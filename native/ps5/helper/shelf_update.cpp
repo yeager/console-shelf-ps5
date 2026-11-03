@@ -22,6 +22,8 @@ namespace shelf {
 namespace {
 [[gnu::used]] const char update_transaction_marker[] =
     "ISSHELF_IN_APP_UPDATER_V1";
+[[gnu::used]] const char update_program_modes_marker[] =
+    "ISSHELF_UPDATE_PROGRAM_MODES_V1";
 constexpr char manifest_path[] = SHELF_UPDATE_DATA_ROOT "/update/ready.manifest";
 constexpr char manifest_temporary[] = SHELF_UPDATE_DATA_ROOT "/update/installed.manifest.tmp";
 constexpr char installed_manifest[] = SHELF_UPDATE_DATA_ROOT "/update/installed.manifest";
@@ -61,6 +63,16 @@ Node node(const char* name, std::uint64_t* bytes = nullptr) {
     if (S_ISDIR(info.st_mode)) return Node::directory;
     return Node::other;
 }
+mode_t program_mode(const char* relative) {
+    return std::strcmp(relative, "eboot.bin") == 0 ||
+           std::strcmp(relative, "sce_module/libc.prx") == 0
+        ? 0755 : 0644;
+}
+bool mode_matches(const char* name, mode_t expected) {
+    struct stat info{};
+    return lstat(name, &info) == 0 && S_ISREG(info.st_mode) &&
+           (info.st_mode & 0777) == expected;
+}
 bool make_path(char* output, std::size_t capacity, const char* root, const char* relative) {
     const int used = std::snprintf(output, capacity, "%s/%s", root, relative);
     return used > 0 && static_cast<std::size_t>(used) < capacity;
@@ -80,6 +92,14 @@ bool sync_parent(const char* name) {
     bool okay = fsync(descriptor) == 0;
     okay = close(descriptor) == 0 && okay;
     return okay;
+}
+bool set_mode_durable(const char* name, mode_t expected) {
+    if (chmod(name, expected) != 0) return false;
+    const int descriptor = open(name, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+    if (descriptor < 0) return false;
+    bool okay = fsync(descriptor) == 0;
+    okay = close(descriptor) == 0 && okay;
+    return okay && mode_matches(name, expected);
 }
 bool rename_durable(const char* source, const char* target) {
     return std::rename(source, target) == 0 && sync_parent(target) && sync_parent(source);
@@ -276,6 +296,7 @@ bool target_files_match(const LoadedManifest& loaded) {
         std::uint64_t bytes = 0;
         if (!make_path(target, sizeof(target), target_root, loaded.entries[i].path) ||
             node(target, &bytes) != Node::file || bytes != loaded.entries[i].bytes ||
+            !mode_matches(target, program_mode(loaded.entries[i].path)) ||
             !hash_file(target, observed) || std::strcmp(observed, loaded.entries[i].sha256) != 0)
             return false;
     }
@@ -321,6 +342,8 @@ bool preflight_targets(const LoadedManifest& loaded) {
             return false;
         const auto target_state = node(target);
         if (target_state != Node::missing && target_state != Node::file) return false;
+        if (target_state == Node::file &&
+            !mode_matches(target, program_mode(loaded.entries[i].path))) return false;
     }
     return true;
 }
@@ -357,7 +380,8 @@ bool rollback(const LoadedManifest& loaded, FILE* log) {
                 okay = false;
                 continue;
             }
-            if (!rename_durable(backup, target)) okay = false;
+            if (!rename_durable(backup, target) ||
+                !mode_matches(target, program_mode(entry.path))) okay = false;
         } else if (backup_state != Node::missing) {
             okay = false;
         } else if (target_state == Node::file && staged_state == Node::missing) {
@@ -399,6 +423,11 @@ int recover(const LaunchRequest& request, LoadedManifest& loaded, FILE* log, boo
         return -EINVAL;
     if (std::strcmp(journal_state, "COMMIT") == 0) {
         announce(notifier, notifier_context, UpdateTransactionStage::finishing, request.rom);
+        if (!target_files_match(loaded)) {
+            result("recovery-failed", request.rom,
+                   "Committed program bytes or executable permissions no longer match the approved update.");
+            return -EIO;
+        }
         if (!finalize(loaded, log)) return -EIO;
         result("installed", request.rom, "Interrupted cleanup completed; the verified update was already committed.");
         return 1;
@@ -442,13 +471,17 @@ int apply(const LaunchRequest& request, LoadedManifest& loaded, FILE* log,
                 okay = rename_durable(target, backup);
             else
                 okay = target_state == Node::missing;
-            if (okay) okay = rename_durable(staged, target) && chmod(target, 0644) == 0;
+            const mode_t expected_mode = program_mode(entry.path);
+            if (okay) okay = rename_durable(staged, target) &&
+                             set_mode_durable(target, expected_mode);
 #ifdef SHELF_UPDATE_HOST_TEST
             if (okay) ++placed;
 #endif
             if (log) {
-                std::fprintf(log, "update file: %s %s%s\n", okay ? "placed" : "failed", entry.path,
-                             executable ? " (executable last)" : "");
+                std::fprintf(log, "update file: %s %s mode=%04o%s\n",
+                             okay ? "placed" : "failed", entry.path,
+                             static_cast<unsigned>(expected_mode),
+                             executable ? " (entrypoint last)" : "");
                 std::fflush(log);
             }
         }
@@ -487,7 +520,8 @@ int apply_update_transaction(const LaunchRequest& request, FILE* log,
                              UpdateTransactionNotifier notifier,
                              void* notifier_context) {
     if (log) {
-        std::fprintf(log, "update transaction: %s\n", update_transaction_marker);
+        std::fprintf(log, "update transaction: %s modes=%s\n",
+                     update_transaction_marker, update_program_modes_marker);
         std::fflush(log);
     }
     if ((request.mode != LaunchMode::self_update && request.mode != LaunchMode::update_recover) ||

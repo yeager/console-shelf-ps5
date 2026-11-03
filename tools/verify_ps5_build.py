@@ -122,6 +122,12 @@ def verify_recorded_hashes(folder):
                     "observeNegativeReturn": True,
                     "marker": "ISSHELF_EXACT_UPDATE_RELAUNCH_V4"},
                 "Embedded helper update-relaunch contract differs")
+        require(helper.get("updateProgramModes") == {
+                    "eboot.bin": "0755", "sce_module/libc.prx": "0755",
+                    "otherManifestFiles": "0644", "durable": True,
+                    "verifiedAfterInstall": True,
+                    "marker": "ISSHELF_UPDATE_PROGRAM_MODES_V1"},
+                "Embedded helper executable-mode contract differs")
         require(helper.get("updateDebugNotifications") == {
                     "style": "kernel-text", "downloadPercent": [25, 50, 75],
                     "helperStages": ["verify", "recover", "install", "restore", "finish", "relaunch"],
@@ -129,8 +135,9 @@ def verify_recorded_hashes(folder):
                     "marker": "ISSHELF_UPDATE_DEBUG_NOTICES_V1"},
                 "Embedded helper update-notification contract differs")
         require(data.count(b"ISSHELF_EXACT_UPDATE_RELAUNCH_V4") == 1 and
+                data.count(b"ISSHELF_UPDATE_PROGRAM_MODES_V1") == 1 and
                 data.count(b"Please don't open anything for %u seconds;") == 1,
-                "Embedded helper lacks the protected 35-second update-relaunch evidence")
+                "Embedded helper lacks updater relaunch or executable-mode evidence")
     private_probe = recorded.get("embeddedConsoleTilePathProbe")
     require((private_probe is not None) == bridge,
             "Read-only path probe must be embedded only in the private UI test build")

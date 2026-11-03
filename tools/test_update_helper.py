@@ -5,6 +5,7 @@ import hashlib
 import os
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
 from bootstrap_ps5_toolchain import environment, host_options, prepare
@@ -15,11 +16,13 @@ TAG = "v9.8.7"
 PROGRAM_OLD = {
     "assets/app.dat": b"old packaged asset\n",
     "eboot.bin": b"old executable\n",
+    "sce_module/libc.prx": b"old runtime\n",
     "sce_sys/param.json": b'{"old":true}\n',
 }
 PROGRAM_NEW = {
     "assets/app.dat": b"new packaged asset\n",
     "eboot.bin": b"new executable\n",
+    "sce_module/libc.prx": b"new runtime\n",
     "sce_sys/param.json": b'{"new":true}\n',
 }
 PLACEMENT_ORDER = [
@@ -50,12 +53,17 @@ def write(path, raw):
     path.write_bytes(raw)
 
 
+def program_mode(relative):
+    return 0o755 if relative in ("eboot.bin", "sce_module/libc.prx") else 0o644
+
+
 def fixture(root):
     data = root / "data/console-shelf"
     app = root / "data/homebrew/PPSA99541"
     stage = data / "update/stage/PPSA99541"
     for relative, raw in PROGRAM_OLD.items():
         write(app / relative, raw)
+        os.chmod(app / relative, program_mode(relative))
     for relative, raw in PROGRAM_NEW.items():
         write(stage / relative, raw)
     for relative, raw in SENTINELS.items():
@@ -86,6 +94,10 @@ def assert_program(app, expected):
     for relative, raw in expected.items():
         if (app / relative).read_bytes() != raw:
             raise AssertionError("Unexpected installed program byte: " + relative)
+        observed_mode = (app / relative).stat().st_mode & 0o777
+        if observed_mode != program_mode(relative):
+            raise AssertionError(
+                f"Unexpected installed program mode: {relative}={observed_mode:04o}")
 
 
 def execute(executable, manifest_sha, fail_before=None):
@@ -114,6 +126,7 @@ def move_replacement(data, app, relative, place=True):
     (app / relative).replace(backup)
     if place:
         (data / "update/stage/PPSA99541" / relative).replace(app / relative)
+        os.chmod(app / relative, program_mode(relative))
 
 
 def emulate_begin(data, app, manifest_sha, placed=1, backup_only=None):
@@ -145,7 +158,9 @@ def main():
     env = environment(prefix)
     flags, link = host_options(prefix)
     output = CACHE / "update-helper-tests"
-    root = output / "root"
+    # WSL's /mnt/c mount does not preserve distinct Unix executable bits, so
+    # permission-sensitive updater fixtures must live on the Linux filesystem.
+    root = Path(tempfile.mkdtemp(prefix="isshelf-update-helper-"))
     output.mkdir(parents=True, exist_ok=True)
     relaunch_executable = output / "update-relaunch-tests"
     run([prefix / "usr/bin/clang++-18", *flags, *link, "-std=c++17", "-O1",
@@ -168,6 +183,19 @@ def main():
     if execute(executable, manifest_sha) != 0:
         raise AssertionError("Successful update transaction failed")
     assert_program(app, PROGRAM_NEW)
+    assert_sentinels(root, protected)
+
+    reset(root)
+    data, app, manifest_sha = fixture(root)
+    protected = sentinel_snapshot(root)
+    os.chmod(app / "eboot.bin", 0o644)
+    if execute(executable, manifest_sha) >= 0:
+        raise AssertionError("Updater accepted a non-executable existing entrypoint")
+    for relative, raw in PROGRAM_OLD.items():
+        if (app / relative).read_bytes() != raw:
+            raise AssertionError("Mode preflight changed program bytes: " + relative)
+    if (app / "eboot.bin").stat().st_mode & 0o777 != 0o644:
+        raise AssertionError("Mode preflight changed the refused entrypoint")
     assert_sentinels(root, protected)
 
     reset(root)
@@ -247,7 +275,8 @@ def main():
     assert_program(app, PROGRAM_NEW)
     assert_sentinels(root, protected)
 
-    print("PASS: updater recovery and single-request exact-title relaunch preserve every tested safety boundary.")
+    shutil.rmtree(root)
+    print("PASS: updater recovery, executable modes, and single-request exact-title relaunch preserve every tested safety boundary.")
 
 
 if __name__ == "__main__":

@@ -263,6 +263,7 @@ def build(standard_runtime=True, ui_test_bridge=False, owned_tile_writes=False):
                                      "permissionChanges": helper_record["permissionChanges"],
                                      "exactOriginClose": helper_record["exactOriginClose"],
                                      "exactUpdateRelaunch": helper_record["exactUpdateRelaunch"],
+                                     "updateProgramModes": helper_record["updateProgramModes"],
                                      "updateDebugNotifications": helper_record["updateDebugNotifications"]}
     if ui_test_bridge:
         raw_elf = elf.read_bytes()
