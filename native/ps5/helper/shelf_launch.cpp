@@ -16,6 +16,7 @@
 #include "shelf/launch_protocol.hpp"
 #include "shelf/catalog.generated.hpp"
 #include "shelf/update_helper.hpp"
+#include "shelf/update_relaunch.hpp"
 #include <arpa/inet.h>
 #include <cerrno>
 #include <cstddef>
@@ -46,6 +47,7 @@ struct AppLaunchContext {
     std::uint32_t check_flags;
 };
 int sceSystemServiceLaunchApp(const char*, const char**, AppLaunchContext*);
+int sceLncUtilLaunchApp(const char*, const char**, AppLaunchContext*);
 int sceKernelOpenEventFlag(std::intptr_t*, const char*);
 int sceKernelPollEventFlag(std::intptr_t, std::uint64_t, unsigned, std::uint64_t*);
 int sceKernelCloseEventFlag(std::intptr_t);
@@ -54,6 +56,8 @@ static_assert(sizeof(AppLaunchContext) == 32 && offsetof(AppLaunchContext, check
 namespace {
 constexpr char exact_origin_close_marker[] =
     "ISSHELF_EXACT_ORIGIN_CLOSE_V1";
+constexpr char exact_update_relaunch_marker[] =
+    "ISSHELF_EXACT_UPDATE_RELAUNCH_V1";
 constexpr char request_path[] = "/data/console-shelf/launch-request.txt";
 constexpr char status_path[] = "/data/console-shelf/launch-status.txt";
 constexpr char status_temporary[] = "/data/console-shelf/launch-status.tmp";
@@ -63,6 +67,8 @@ struct Context {
     std::uint32_t user = 0;
     int launch_status = 0;
     int probe_status = 0;
+    int update_relaunch_observation = -2;
+    unsigned update_relaunch_attempts = 0;
     std::intptr_t focus_handle = -1;
     bool focus_open = false;
     FILE* journal = nullptr;
@@ -211,6 +217,49 @@ int close_origin(void* raw) {
 }
 void wait(void*, unsigned milliseconds) {
     usleep(milliseconds * 1000);
+}
+shelf::UpdateRelaunchState update_relaunch_state(void* raw) {
+    auto& context = *static_cast<Context*>(raw);
+    const int id = sceSystemServiceGetAppIdOfRunningBigApp();
+    shelf::UpdateRelaunchState state = shelf::UpdateRelaunchState::unknown;
+    char title[32]{};
+    int title_status = -1;
+    if (id == 0 || id == -1) {
+        state = shelf::UpdateRelaunchState::idle;
+    } else if (id > 0) {
+        title_status = sceSystemServiceGetAppTitleId(id, title);
+        if (title_status == 0 && std::memchr(title, 0, sizeof(title)) &&
+            std::strlen(title) == 9) {
+            state = std::strcmp(title, shelf::shelf_title_id) == 0
+                ? shelf::UpdateRelaunchState::target
+                : shelf::UpdateRelaunchState::other_app;
+        }
+    }
+    const int observed = static_cast<int>(state);
+    if (context.journal && observed != context.update_relaunch_observation) {
+        std::fprintf(context.journal,
+                     "isShelf update relaunch observation: state=%d app=0x%08x title_status=0x%08x title=%.31s\n",
+                     observed, static_cast<unsigned>(id), static_cast<unsigned>(title_status), title);
+        std::fflush(context.journal);
+        context.update_relaunch_observation = observed;
+    }
+    return state;
+}
+int launch_update_target(void* raw) {
+    auto& context = *static_cast<Context*>(raw);
+    AppLaunchContext params{};
+    params.size = sizeof(params);
+    params.user = context.user;
+    const int result = sceLncUtilLaunchApp(shelf::shelf_title_id, nullptr, &params);
+    ++context.update_relaunch_attempts;
+    if (context.journal) {
+        std::fprintf(context.journal,
+                     "isShelf update relaunch attempt %u: sceLncUtilLaunchApp(%s)=0x%08x\n",
+                     context.update_relaunch_attempts, shelf::shelf_title_id,
+                     static_cast<unsigned>(result));
+        std::fflush(context.journal);
+    }
+    return result;
 }
 enum class ResidualRegistration { absent, exact, conflict, failed };
 enum class PathState { missing, present, failed };
@@ -755,19 +804,31 @@ int launch(void* raw, const shelf::LaunchRequest& request) {
     if (request.mode == shelf::LaunchMode::self_update ||
         request.mode == shelf::LaunchMode::update_recover) {
         const int transaction = shelf::apply_update_transaction(request, context.journal);
-        AppLaunchContext params{};
-        params.size = sizeof(params);
-        params.user = user;
-        params.check_flags = 2;
-        const int reopened = sceSystemServiceLaunchApp(shelf::shelf_title_id, nullptr, &params);
+        shelf::UpdateRelaunchOutcome reopened;
+        if (transaction >= 0) {
+            reopened = shelf::relaunch_updated_shelf(
+                {&context, update_relaunch_state, launch_update_target, wait});
+        }
         if (context.journal) {
             std::fprintf(context.journal,
-                         "isShelf update: transaction=0x%08x relaunch=0x%08x check_flags=0x%08x\n",
-                         static_cast<unsigned>(transaction), static_cast<unsigned>(reopened),
-                         params.check_flags);
+                         "isShelf update: transaction=0x%08x relaunch_result=%d relaunch_code=0x%08x "
+                         "attempts=%u marker=%s\n",
+                         static_cast<unsigned>(transaction), static_cast<int>(reopened.result),
+                         static_cast<unsigned>(reopened.last_code), reopened.attempts,
+                         exact_update_relaunch_marker);
             std::fflush(context.journal);
         }
-        return context.launch_status = transaction < 0 ? transaction : reopened;
+        if (transaction < 0)
+            return context.launch_status = transaction;
+        if (reopened.result == shelf::UpdateRelaunchResult::launched)
+            return context.launch_status = 0;
+        if (reopened.result == shelf::UpdateRelaunchResult::foreground_changed)
+            return context.launch_status = -EBUSY;
+        if (reopened.result == shelf::UpdateRelaunchResult::not_observed)
+            return context.launch_status = -ETIMEDOUT;
+        if (reopened.result == shelf::UpdateRelaunchResult::refused && reopened.last_code < 0)
+            return context.launch_status = reopened.last_code;
+        return context.launch_status = -EIO;
     }
     auto args = shelf::launch_arguments(request);
     AppLaunchContext params{};

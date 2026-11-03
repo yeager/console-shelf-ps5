@@ -22,12 +22,13 @@ def main(standard_runtime=False):
     update_source = ROOT / "native/ps5/helper/shelf_update.cpp"
     protocol = ROOT / "native/include/shelf/launch_protocol.hpp"
     update_helper = ROOT / "native/include/shelf/update_helper.hpp"
+    update_relaunch = ROOT / "native/include/shelf/update_relaunch.hpp"
     update_protocol = ROOT / "native/include/shelf/update_protocol.hpp"
     sha256_header = ROOT / "native/include/shelf/sha256.hpp"
     residual_guard = ROOT / "native/include/shelf/tile_residual_guard.hpp"
     catalog = ROOT / "native/include/shelf/catalog.generated.hpp"
     limits = ROOT / "native/ps5/helper/runtime_limits.c"
-    tracked_inputs = (source, update_source, protocol, update_helper, update_protocol,
+    tracked_inputs = (source, update_source, protocol, update_helper, update_relaunch, update_protocol,
                       sha256_header, residual_guard, catalog, limits)
     inputs = {p.relative_to(ROOT).as_posix(): sha256(p) for p in tracked_inputs}
     archive, sdk_source = prepare_sdk_source()
@@ -144,6 +145,9 @@ def main(standard_runtime=False):
             "Exact-origin close marker or strong import differs")
     require(raw.count(b"ISSHELF_IN_APP_UPDATER_V1") == 1,
             "The exact in-app update transaction marker is missing")
+    require(raw.count(b"ISSHELF_EXACT_UPDATE_RELAUNCH_V1") == 1 and
+            "sceLncUtilLaunchApp" in imports,
+            "The bounded exact-title updater relaunch marker or import differs")
     require(inputs == {p.relative_to(ROOT).as_posix(): sha256(p) for p in tracked_inputs}, "Build input drift")
     result = {"elf": {"bytes": len(raw), "sha256": sha256(elf)}, "inputs": inputs,
               "hardwareTest": "not run", "transport": "not connected", "deployed": False,
@@ -154,9 +158,13 @@ def main(standard_runtime=False):
               "permissionChanges": standard_runtime,
               "crtPatchHook": ("Unmodified pinned SDK startup; targets helper process capabilities and syscall bounds"
                                if standard_runtime else "verified return 0; SDK patch.c excluded; kernel write routines absent"),
-              "policy": "cooperative Shelf closure; after five stuck committed seconds, one exact PPSA99541 origin close; one selected SystemService launch, one exact owner-approved journalled isShelf program update with SHA-256 revalidation, executable-last commit and rollback, or after a 3 s post-close settle and a read-only fixed-loopback readiness window of at most 8 s, one fixed tile uninstall, one bounded owned-title removal/artwork batch, or the complete ordered PPSA99700..PPSA99751 residual sweep; readiness polling continuously proves no foreground app and sends no HTTP request; authorization is rechecked before the first mutation; residual cleanup first proves the manual list excludes every protected slot and preflights every global registration as absent or exact platform-owned isShelf identity and artwork before any uninstall; maintenance is paced at 1000 ms and followed by one scan; maintenance retries only the same title after an exact game_active or scanner_busy receipt, five continuous idle seconds, and no observed big app, with at most five retries per title; long maintenance may update only its exact nonce-and-issued status owner; read-only focus observation; no arbitrary process kill, launch retry or emulator-file writes",
+              "policy": "cooperative Shelf closure; after five stuck committed seconds, one exact PPSA99541 origin close; one selected SystemService launch, one exact owner-approved journalled isShelf program update with SHA-256 revalidation, executable-last commit and rollback, followed only by a bounded exact-PPSA99541 LncUtil relaunch with foreground fail-closed checks and positive running-title confirmation, or after a 3 s post-close settle and a read-only fixed-loopback readiness window of at most 8 s, one fixed tile uninstall, one bounded owned-title removal/artwork batch, or the complete ordered PPSA99700..PPSA99751 residual sweep; readiness polling continuously proves no foreground app and sends no HTTP request; authorization is rechecked before the first mutation; residual cleanup first proves the manual list excludes every protected slot and preflights every global registration as absent or exact platform-owned isShelf identity and artwork before any uninstall; maintenance is paced at 1000 ms and followed by one scan; maintenance retries only the same title after an exact game_active or scanner_busy receipt, five continuous idle seconds, and no observed big app, with at most five retries per title; long maintenance may update only its exact nonce-and-issued status owner; read-only focus observation; no arbitrary process kill, arbitrary-title launch retry or emulator-file writes",
               "exactOriginClose": {"titleId": "PPSA99541", "delayMs": 5000,
                                      "attempts": 1, "marker": "ISSHELF_EXACT_ORIGIN_CLOSE_V1"},
+              "exactUpdateRelaunch": {"titleId": "PPSA99541", "rounds": 2,
+                                        "attemptsPerRound": 5, "retryMs": 800,
+                                        "observeMs": 8000,
+                                        "marker": "ISSHELF_EXACT_UPDATE_RELAUNCH_V1"},
               "approvalForStandardRuntime": "required before console use" if standard_runtime else "not applicable"}
     (output / "build.json").write_text(json.dumps(result, indent=2) + "\n")
     print(json.dumps(result, indent=2))

@@ -147,6 +147,11 @@ def main():
     output = CACHE / "update-helper-tests"
     root = output / "root"
     output.mkdir(parents=True, exist_ok=True)
+    relaunch_executable = output / "update-relaunch-tests"
+    run([prefix / "usr/bin/clang++-18", *flags, *link, "-std=c++17", "-O1",
+         "-Wall", "-Wextra", "-Werror", "-I", ROOT / "native/include",
+         ROOT / "native/tests/update_relaunch_tests.cpp", "-o", relaunch_executable], env=env)
+    run([relaunch_executable], env=env)
     executable = output / "update-helper-tests"
     data = root / "data/console-shelf"
     app = root / "data/homebrew/PPSA99541"
@@ -242,7 +247,7 @@ def main():
     assert_program(app, PROGRAM_NEW)
     assert_sentinels(root, protected)
 
-    print("PASS: updater success, rollback and every file/cleanup interruption boundary preserve all user-data sentinels.")
+    print("PASS: updater transaction recovery and bounded exact-title relaunch preserve every tested safety boundary.")
 
 
 if __name__ == "__main__":
