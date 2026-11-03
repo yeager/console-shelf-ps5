@@ -116,6 +116,21 @@ def verify_recorded_hashes(folder):
                     "titleId": "PPSA99541", "delayMs": 5000, "attempts": 1,
                     "marker": "ISSHELF_EXACT_ORIGIN_CLOSE_V1"},
                 "Embedded helper exact-origin close contract differs")
+        require(helper.get("exactUpdateRelaunch") == {
+                    "titleId": "PPSA99541", "rounds": 1, "attemptsPerRound": 1,
+                    "settleMs": 35000, "retryMs": 0, "observeMs": 30000,
+                    "observeNegativeReturn": True,
+                    "marker": "ISSHELF_EXACT_UPDATE_RELAUNCH_V4"},
+                "Embedded helper update-relaunch contract differs")
+        require(helper.get("updateDebugNotifications") == {
+                    "style": "kernel-text", "downloadPercent": [25, 50, 75],
+                    "helperStages": ["verify", "recover", "install", "restore", "finish", "relaunch"],
+                    "idleWarningSeconds": 35,
+                    "marker": "ISSHELF_UPDATE_DEBUG_NOTICES_V1"},
+                "Embedded helper update-notification contract differs")
+        require(data.count(b"ISSHELF_EXACT_UPDATE_RELAUNCH_V4") == 1 and
+                data.count(b"Please don't open anything for %u seconds;") == 1,
+                "Embedded helper lacks the protected 35-second update-relaunch evidence")
     private_probe = recorded.get("embeddedConsoleTilePathProbe")
     require((private_probe is not None) == bridge,
             "Read-only path probe must be embedded only in the private UI test build")

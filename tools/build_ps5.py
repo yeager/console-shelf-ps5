@@ -261,7 +261,9 @@ def build(standard_runtime=True, ui_test_bridge=False, owned_tile_writes=False):
     report["embeddedLaunchHelper"] = {**helper_record["elf"], "offset": elf.read_bytes().index(payload),
                                      "runtimeMode": helper_record["runtimeMode"],
                                      "permissionChanges": helper_record["permissionChanges"],
-                                     "exactOriginClose": helper_record["exactOriginClose"]}
+                                     "exactOriginClose": helper_record["exactOriginClose"],
+                                     "exactUpdateRelaunch": helper_record["exactUpdateRelaunch"],
+                                     "updateDebugNotifications": helper_record["updateDebugNotifications"]}
     if ui_test_bridge:
         raw_elf = elf.read_bytes()
         require(probe_payload is not None and probe_record is not None and raw_elf.count(probe_payload) == 1,
