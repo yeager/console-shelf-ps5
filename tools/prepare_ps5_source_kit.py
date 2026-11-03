@@ -5,7 +5,9 @@ import datetime
 import hashlib
 import io
 import json
+import os
 from pathlib import Path
+import re
 import subprocess
 import uuid
 import zipfile
@@ -51,13 +53,30 @@ hardware and launch acceptance in docs/PROTOTYPE-PLAN.md.
 """
 
 
+def root_git(*arguments: str, text: bool = False):
+    """Run Git against ROOT when Windows worktree pointers are used via WSL."""
+    marker = ROOT / ".git"
+    command = ["git"]
+    if marker.is_file():
+        match = re.fullmatch(r"gitdir:\s*(.+)\s*", marker.read_text(encoding="utf-8"))
+        require(match is not None, "Invalid Git worktree pointer")
+        raw = match.group(1).replace("\\", "/")
+        if os.name != "nt" and re.match(r"^[A-Za-z]:/", raw):
+            raw = "/mnt/" + raw[0].lower() + raw[2:]
+        git_dir = Path(raw)
+        if not git_dir.is_absolute():
+            git_dir = (ROOT / git_dir).resolve()
+        command.extend(["--git-dir", str(git_dir), "--work-tree", str(ROOT)])
+    return subprocess.check_output([*command, *arguments], cwd=ROOT, text=text)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--inputs", type=Path, required=True, help="Verified matching object/library snapshot")
     args = parser.parse_args()
-    require(not subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT).strip(),
+    require(not root_git("status", "--porcelain").strip(),
             "Commit reviewed source before assembling the source kit")
-    commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
+    commit = root_git("rev-parse", "HEAD", text=True).strip()
     inputs = args.inputs.resolve()
     record = json.loads((inputs / "link-inputs.json").read_text())
     launcher = record.get("launcherRuntime", {})
@@ -78,7 +97,7 @@ def main():
     fingerprint = json.loads((inputs / "build-source.json").read_text())
     require(source_fingerprint() == fingerprint, "Source kit does not match the compiled application inputs")
     for path, digest in fingerprint.items():
-        raw = subprocess.check_output(["git", "cat-file", "blob", commit + ":" + path], cwd=ROOT)
+        raw = root_git("cat-file", "blob", commit + ":" + path)
         require(hashlib.sha256(raw).hexdigest() == digest, "Committed source differs from application build")
     require(record["objectOrder"] == [name + ".o" for name in OBJECTS], "Unexpected object snapshot")
     sources = prepare()
@@ -91,7 +110,7 @@ def main():
         member_path(path)
         target.writestr("Console-Shelf/" + path, raw)
         members.append({"path": path, "bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest()})
-    tracked = subprocess.check_output(["git", "archive", "--format=zip", commit], cwd=ROOT)
+    tracked = root_git("archive", "--format=zip", commit)
     with zipfile.ZipFile(archive, "x", compression=zipfile.ZIP_DEFLATED, compresslevel=7) as target:
         with zipfile.ZipFile(io.BytesIO(tracked)) as source:
             require(source.testzip() is None, "Tracked source archive failed integrity")
