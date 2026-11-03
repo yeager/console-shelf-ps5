@@ -14,6 +14,9 @@
   <a href="https://ko-fi.com/iswebro">
     <img src="assets/support/isshelf-tip-decoration.png" width="180" alt="A coffee cup and game controller with a glowing heart" />
   </a>
+  <a href="https://ko-fi.com/D8N829XAPQ">
+    <img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Buy Iswebro a Coffee on Ko-fi" />
+  </a>
 </p>
 
 **Your consoles. Your games. Your play room.** isShelf by **Iswebro** brings your existing PS5 homebrew libraries together in Grid, Swipe and a customisable Shelf room.
