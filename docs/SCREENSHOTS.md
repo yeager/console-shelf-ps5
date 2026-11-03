@@ -42,4 +42,4 @@ Set the TV display, your message, favourite-game rotation, intro scope and optio
 
 The public images are resized WebP copies with capture metadata removed. The original JPEG XR screenshots and full recording stay on the owner's PC. [Media provenance and file hashes](images/ps5/manifest.json).
 
-[Beginner's guide](BEGINNERS.md) · [Room customisation](ROOM.md) · [Download the beta](https://github.com/Iswebro/console-shelf-ps5/releases/tag/v0.1.0-beta.1)
+[Beginner's guide](BEGINNERS.md) · [Room customisation](ROOM.md) · [Download the stable release](https://github.com/Iswebro/console-shelf-ps5/releases/tag/v0.1.0)

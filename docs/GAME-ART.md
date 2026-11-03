@@ -1,6 +1,6 @@
 # Game artwork
 
-Private build `00.100.027` presents front covers in console-specific 3D cases, preserves existing rendered case artwork, and uses the same presentation in list thumbnails and the room TV's favourite-game mode. A game without an image uses its console illustration. The public `v0.1.0-beta.1` download predates this feature.
+Stable `v0.1.0` presents front covers in console-specific 3D cases, preserves existing rendered case artwork, and uses the same presentation in list thumbnails and the room TV's favourite-game mode. A game without an image uses its console illustration.
 
 ## Console cases
 

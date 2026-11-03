@@ -2,7 +2,7 @@
 
 Your room's TV can play a short personal video each time you select a console. The file lives on the PS5: no PC streaming server is needed afterward.
 
-This is for the native **v0.1.0-beta.1** app. The separate browser preview has its own file pickers; choosing a file there does not upload it to the PS5.
+This guide applies to the native **v0.1.0** app. The separate browser preview has its own file pickers; choosing a file there does not upload it to the PS5.
 
 ## Try the included intros first
 
@@ -21,7 +21,7 @@ All 52 catalogue systems have an original, silent isShelf animation. They are no
 - A local video you have permission to use, such as `C:\My clips\my-ps2-intro.mp4`.
 - A Windows PC with [Python 3.11 or newer](https://www.python.org/downloads/windows/).
 - A portable Windows FFmpeg build linked from [FFmpeg's download page](https://ffmpeg.org/download.html). Keep **ffmpeg.exe** and **ffprobe.exe** together in its `bin` folder.
-- The **Source-and-Relink.zip** from the [same isShelf release](https://github.com/Iswebro/console-shelf-ps5/releases/tag/v0.1.0-beta.1), extracted on the PC. It contains `tools/prepare-intro.py` and needs no compiler for this task.
+- The **Source-and-Relink.zip** from the [same isShelf release](https://github.com/Iswebro/console-shelf-ps5/releases/tag/v0.1.0), extracted on the PC. It contains `tools/prepare-intro.py` and needs no compiler for this task.
 - Your existing local FTP connection to the PS5. [FileZilla Client](https://filezilla-project.org/) is one option; its [connection/transfer guide](https://wiki.filezilla-project.org/Using) explains the two panes.
 
 The converter works from a local file and does not download YouTube videos, contact the PS5 or modify the original. You can use a short portion of your own longer recording with `--start` and `--seconds`.
