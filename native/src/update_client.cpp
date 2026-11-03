@@ -40,14 +40,20 @@ bool path(char* output, std::size_t capacity, const char* root, const char* suff
 enum class PathState { missing, file, directory, other, failed };
 PathState path_state(const char* name, std::uint64_t* bytes = nullptr) {
     struct stat info{};
-    if (lstat(name, &info) != 0) return errno == ENOENT ? PathState::missing : PathState::failed;
+    if (lstat(name, &info) != 0) {
+        // PS5 application/data aliases can be readable even when pathname
+        // metadata is unavailable. Fall back to an opened, no-symlink
+        // descriptor so resumable state is not silently mistaken for missing.
+        const int file = open(name, O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
+        if (file < 0) return errno == ENOENT ? PathState::missing : PathState::failed;
+        const bool stated = fstat(file, &info) == 0;
+        const bool closed = close(file) == 0;
+        if (!stated || !closed) return PathState::failed;
+    }
     if (bytes) *bytes = info.st_size >= 0 ? static_cast<std::uint64_t>(info.st_size) : 0;
     if (S_ISREG(info.st_mode) && info.st_size >= 0) return PathState::file;
     if (S_ISDIR(info.st_mode)) return PathState::directory;
     return PathState::other;
-}
-bool regular(const char* name, std::uint64_t* bytes = nullptr) {
-    return path_state(name, bytes) == PathState::file;
 }
 bool directory(const char* name) {
     return path_state(name) == PathState::directory;
@@ -121,17 +127,18 @@ bool hash_file(const char* name, char (&output)[65], std::uint64_t* bytes = null
     if (bytes) *bytes = total;
     return true;
 }
-bool read_small(const char* name, char*& output, std::size_t& bytes, std::size_t limit) {
+enum class SmallRead { missing, complete, invalid };
+SmallRead read_small_state(const char* name, char*& output, std::size_t& bytes, std::size_t limit) {
     output = nullptr;
     bytes = 0;
-    if (!name || !limit || limit == SIZE_MAX) return false;
+    if (!name || !limit || limit == SIZE_MAX) return SmallRead::invalid;
     // /app0 is a PS5 application mount. Its files are readable through the
     // opened descriptor even on systems where a preceding lstat of the alias
     // is unavailable. Open the fixed path once, refuse symlinks, and enforce
     // the bound from the bytes actually read instead of trusting pathname
     // metadata in a separate check/use step.
     const int file = open(name, O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
-    if (file < 0) return false;
+    if (file < 0) return errno == ENOENT ? SmallRead::missing : SmallRead::invalid;
     output = static_cast<char*>(std::malloc(limit + 1));
     bool okay = output != nullptr;
     std::size_t used = 0;
@@ -148,11 +155,14 @@ bool read_small(const char* name, char*& output, std::size_t& bytes, std::size_t
     if (!okay) {
         std::free(output);
         output = nullptr;
-        return false;
+        return SmallRead::invalid;
     }
     output[used] = 0;
     bytes = used;
-    return true;
+    return SmallRead::complete;
+}
+bool read_small(const char* name, char*& output, std::size_t& bytes, std::size_t limit) {
+    return read_small_state(name, output, bytes, limit) == SmallRead::complete;
 }
 bool write_atomic(const char* target, const char* temporary, const char* bytes, std::size_t size) {
     std::remove(temporary);
@@ -732,13 +742,13 @@ bool update_recovery_pending(const char* data_root, char (&tag)[32],
 #ifdef SHELF_PS5
     char journal[2304], manifest_path[2304];
     if (!path(journal, sizeof(journal), data_root, "update/journal.txt") ||
-        !path(manifest_path, sizeof(manifest_path), data_root, "update/ready.manifest") ||
-        !regular(manifest_path)) return false;
+        !path(manifest_path, sizeof(manifest_path), data_root, "update/ready.manifest")) return false;
     char* journal_text = nullptr;
     std::size_t journal_bytes = 0;
     char* manifest_text = nullptr;
     std::size_t manifest_bytes = 0;
-    if (!read_small(manifest_path, manifest_text, manifest_bytes, 256 * 1024)) {
+    if (read_small_state(manifest_path, manifest_text, manifest_bytes, 256 * 1024) !=
+        SmallRead::complete) {
         std::free(journal_text);
         std::free(manifest_text);
         return false;
@@ -751,18 +761,16 @@ bool update_recovery_pending(const char* data_root, char (&tag)[32],
     char observed[65]{};
     const bool hashed = hash_file(manifest_path, observed);
     char expected[65]{}, state[16]{}, extra = 0;
-    bool journal_ok = true;
-    if (regular(journal)) {
-        journal_ok = read_small(journal, journal_text, journal_bytes, 512);
+    const auto journal_state = read_small_state(journal, journal_text, journal_bytes, 512);
+    bool journal_ok = journal_state == SmallRead::missing;
+    if (journal_state == SmallRead::complete) {
+        journal_ok = true;
         const int fields = journal_ok ? std::sscanf(journal_text,
             "isshelf-update-journal 1\nmanifest=%64[0-9a-f]\nstate=%15[A-Z]\n%c",
             expected, state, &extra) : 0;
         journal_ok = journal_ok && fields == 2 && update_hex_sha256(expected) &&
                      std::strcmp(expected, observed) == 0 &&
                      (std::strcmp(state, "BEGIN") == 0 || std::strcmp(state, "COMMIT") == 0);
-    } else {
-        struct stat info{};
-        journal_ok = lstat(journal, &info) != 0 && errno == ENOENT;
     }
     const bool okay = parsed_ok && hashed && journal_ok;
     if (okay) {
@@ -784,11 +792,10 @@ bool take_update_result(const char* data_root, char (&notice)[192]) {
     notice[0] = 0;
 #ifdef SHELF_PS5
     char result_path[2304];
-    if (!path(result_path, sizeof(result_path), data_root, "update/result.txt") ||
-        !regular(result_path)) return false;
+    if (!path(result_path, sizeof(result_path), data_root, "update/result.txt")) return false;
     char* text = nullptr;
     std::size_t bytes = 0;
-    if (!read_small(result_path, text, bytes, 1024)) return false;
+    if (read_small_state(result_path, text, bytes, 1024) != SmallRead::complete) return false;
     constexpr std::string_view header = "isshelf-update-result 1\n";
     std::string_view input(text, bytes);
     auto field = [&input](std::string_view prefix, std::string_view& value) {

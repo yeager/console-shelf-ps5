@@ -171,7 +171,7 @@ class ReleaseInputTests(unittest.TestCase):
 
     def test_ps5_update_reader_opens_app_mount_before_bounded_read(self):
         source = (Path(__file__).parents[1] / "native/src/update_client.cpp").read_text()
-        match = re.search(r"bool read_small\(.*?\n\}\n(?=bool write_atomic)", source, re.S)
+        match = re.search(r"SmallRead read_small_state\(.*?\n\}\n(?=bool read_small)", source, re.S)
         self.assertIsNotNone(match)
         body = match.group(0)
         self.assertIn("open(name, O_RDONLY | O_NOFOLLOW | O_CLOEXEC)", body)
@@ -179,6 +179,17 @@ class ReleaseInputTests(unittest.TestCase):
         self.assertIn("used > 0 && used <= limit", body)
         self.assertNotIn("regular(name", body)
         self.assertNotIn("lstat(", body)
+
+    def test_update_recovery_reads_owned_files_without_metadata_only_gate(self):
+        source = (Path(__file__).parents[1] / "native/src/update_client.cpp").read_text()
+        recovery = re.search(r"bool update_recovery_pending\(.*?\n\}\n(?=\nbool take_update_result)",
+                             source, re.S)
+        self.assertIsNotNone(recovery)
+        body = recovery.group(0)
+        self.assertIn("read_small_state(manifest_path", body)
+        self.assertIn("journal_state == SmallRead::missing", body)
+        self.assertNotIn("regular(manifest_path)", body)
+        self.assertNotIn("regular(journal)", body)
 
     def test_only_exact_license_newline_difference_is_recorded(self):
         result = verify_asset_sources({"LICENSE": b"fixture license\r\n"}, {"LICENSE": b"fixture license\n"})
