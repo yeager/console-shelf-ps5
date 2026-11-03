@@ -135,6 +135,40 @@ class ReleaseInputTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "lacks corresponding"):
             verify_asset_sources(app, {"assets/3d-icons/n64.png": b"fixture image"})
 
+    def test_update_ca_matches_both_committed_provenance_pins(self):
+        raw = b"fixture certificate bundle\n"
+        record = digest(raw)
+        revision = "b2a886b48739395de675377b03ecce75ab3368a8"
+        url = ("https://raw.githubusercontent.com/Swordpdf/PS5SX2/" + revision +
+               "/ps5/installer/ca/cacert.pem")
+        source = {
+            "native/ps5/dependencies.json": json.dumps({
+                "updateCa": {"url": url, **record},
+            }).encode(),
+            "native/third_party/ps5sx2_https/SOURCE.json": json.dumps({
+                "revision": revision,
+                "externalAsset": {
+                    "localAtBuild": "assets/update-ca.pem",
+                    "upstream": "ps5/installer/ca/cacert.pem",
+                    **record,
+                },
+            }).encode(),
+        }
+        result = verify_asset_sources({"assets/update-ca.pem": raw}, source)
+        self.assertEqual(result["filesCompared"], 1)
+        self.assertEqual(result["byteExactFiles"], 0)
+        self.assertEqual(result["pinnedExternalFiles"][0]["sha256"], record["sha256"])
+        with self.assertRaisesRegex(ValueError, "two committed provenance pins"):
+            verify_asset_sources({"assets/update-ca.pem": raw + b"changed"}, source)
+        changed = copy.deepcopy(source)
+        changed["native/ps5/dependencies.json"] = json.dumps({
+            "updateCa": {"url": url, **digest(b"different")},
+        }).encode()
+        with self.assertRaisesRegex(ValueError, "two committed provenance pins"):
+            verify_asset_sources({"assets/update-ca.pem": raw}, changed)
+        with self.assertRaisesRegex(ValueError, "provenance records"):
+            verify_asset_sources({"assets/update-ca.pem": raw}, {})
+
     def test_only_exact_license_newline_difference_is_recorded(self):
         result = verify_asset_sources({"LICENSE": b"fixture license\r\n"}, {"LICENSE": b"fixture license\n"})
         self.assertEqual(result["byteExactFiles"], 0)

@@ -97,9 +97,30 @@ def verify_asset_sources(app_data, kit_data):
     for name in ("stb_image", "stb_image_write", "stb_truetype"):
         mapped["licenses/" + name + "-source-with-license.h"] = "native/third_party/stb/" + name + ".h"
     generated = {"eboot.bin", "sce_module/libc.prx", "sce_sys/icon0.png", "build-source.json", "START-HERE.md"}
-    compared, line_endings = [], []
+    compared, line_endings, pinned_external = [], [], []
     for name, raw in app_data.items():
         if name in generated:
+            continue
+        if name == "assets/update-ca.pem":
+            dependency_path = "native/ps5/dependencies.json"
+            provenance_path = "native/third_party/ps5sx2_https/SOURCE.json"
+            require(dependency_path in kit_data and provenance_path in kit_data,
+                    "Update CA provenance records are absent from the source kit")
+            dependency = json.loads(kit_data[dependency_path]).get("updateCa", {})
+            provenance = json.loads(kit_data[provenance_path])
+            external = provenance.get("externalAsset", {})
+            revision = provenance.get("revision")
+            expected_url = ("https://raw.githubusercontent.com/Swordpdf/PS5SX2/" + str(revision) +
+                            "/ps5/installer/ca/cacert.pem")
+            observed = digest(raw)
+            require(external.get("localAtBuild") == name and
+                    external.get("upstream") == "ps5/installer/ca/cacert.pem" and
+                    dependency.get("url") == expected_url and
+                    dependency.get("bytes") == external.get("bytes") == observed["bytes"] and
+                    dependency.get("sha256") == external.get("sha256") == observed["sha256"],
+                    "Packaged update CA differs from its two committed provenance pins")
+            pinned_external.append({"path": name, **observed, "url": expected_url,
+                                    "provenance": [dependency_path, provenance_path]})
             continue
         source = mapped.get(name, name if name.startswith(("assets/", "native/assets/fonts/")) or
                             name in ("LICENSE", "THIRD_PARTY.md") else None)
@@ -113,7 +134,9 @@ def verify_asset_sources(app_data, kit_data):
             line_endings.append({"path": name, "difference": "CRLF versus LF only; content unchanged",
                                  "packaged": digest(raw), "source": digest(kit_data[source])})
         compared.append(name)
-    return {"filesCompared": len(compared), "byteExactFiles": len(compared) - len(line_endings),
+    return {"filesCompared": len(compared) + len(pinned_external),
+            "byteExactFiles": len(compared) - len(line_endings),
+            "pinnedExternalFiles": pinned_external,
             "lineEndingOnlyNotices": line_endings}
 
 
