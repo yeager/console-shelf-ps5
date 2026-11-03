@@ -59,7 +59,7 @@ namespace {
 constexpr char exact_origin_close_marker[] =
     "ISSHELF_EXACT_ORIGIN_CLOSE_V1";
 constexpr char exact_update_relaunch_marker[] =
-    "ISSHELF_EXACT_UPDATE_RELAUNCH_V3";
+    "ISSHELF_EXACT_UPDATE_RELAUNCH_V4";
 [[gnu::used]] constexpr char update_debug_notice_marker[] =
     "ISSHELF_UPDATE_DEBUG_NOTICES_V1";
 constexpr char request_path[] = "/data/console-shelf/launch-request.txt";
@@ -882,8 +882,9 @@ int launch(void* raw, const shelf::LaunchRequest& request) {
         if (transaction >= 0) {
             char message[160];
             std::snprintf(message, sizeof(message),
-                          "isShelf %s installed. Waiting for PS5 Home, then opening isShelf...",
-                          request.rom);
+                          "isShelf %s installed. Please don't open anything for %u seconds; "
+                          "isShelf will reopen automatically.",
+                          request.rom, shelf::update_relaunch_settle_ms / 1000u);
             debug_notice(message);
             reopened = shelf::relaunch_updated_shelf(
                 {&context, update_relaunch_state, launch_update_target, wait});

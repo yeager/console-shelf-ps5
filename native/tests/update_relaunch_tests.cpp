@@ -48,6 +48,8 @@ shelf::UpdateRelaunchOutcome run(Fixture& fixture) {
 } // namespace
 
 int main() {
+    static_assert(shelf::update_relaunch_settle_ms >= 35000,
+                  "Updater relaunch must span a full ShadowMount refresh cadence");
     {
         Fixture fixture;
         fixture.launches = {0};

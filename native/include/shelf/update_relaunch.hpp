@@ -7,6 +7,9 @@ namespace shelf {
 // transaction has finished. Swordpdf's PS5SX2 relaunch work establishes the
 // post-exit settle and running-title confirmation shape. isShelf additionally
 // requires a continuously idle Home interval before its one launch request.
+// Physical v0.1.1 recovery testing showed that five seconds raced the console's
+// roughly 30-second ShadowMount refresh cadence and opened the persistent
+// "can't open this app" page. Wait one full cadence plus a five-second margin.
 //
 // Physical PS5 evidence showed why the request must never be repeated: a
 // negative sceLncUtilLaunchApp return still caused ShadowMount to prepare the
@@ -15,7 +18,7 @@ namespace shelf {
 // by a long observation window lets that asynchronous launch finish normally.
 inline constexpr unsigned update_relaunch_rounds = 1;
 inline constexpr unsigned update_relaunch_attempts_per_round = 1;
-inline constexpr unsigned update_relaunch_settle_ms = 5000;
+inline constexpr unsigned update_relaunch_settle_ms = 35000;
 inline constexpr unsigned update_relaunch_observe_ms = 30000;
 inline constexpr unsigned update_relaunch_poll_ms = 100;
 inline constexpr std::uint32_t update_relaunch_already_running = 0x8094000cu;

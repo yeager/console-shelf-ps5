@@ -145,12 +145,14 @@ def main(standard_runtime=False):
             "Exact-origin close marker or strong import differs")
     require(raw.count(b"ISSHELF_IN_APP_UPDATER_V1") == 1,
             "The exact in-app update transaction marker is missing")
-    require(raw.count(b"ISSHELF_EXACT_UPDATE_RELAUNCH_V3") == 1 and
+    require(raw.count(b"ISSHELF_EXACT_UPDATE_RELAUNCH_V4") == 1 and
             "sceLncUtilLaunchApp" in imports,
             "The single-request exact-title updater relaunch marker or import differs")
     require(raw.count(b"ISSHELF_UPDATE_DEBUG_NOTICES_V1") == 1 and
             "sceKernelSendNotificationRequest" in imports,
             "The owner-visible updater notification marker or import differs")
+    require(raw.count(b"Please don't open anything for %u seconds;") == 1,
+            "The protected updater idle-window warning is missing")
     require(inputs == {p.relative_to(ROOT).as_posix(): sha256(p) for p in tracked_inputs}, "Build input drift")
     result = {"elf": {"bytes": len(raw), "sha256": sha256(elf)}, "inputs": inputs,
               "hardwareTest": "not run", "transport": "not connected", "deployed": False,
@@ -161,17 +163,18 @@ def main(standard_runtime=False):
               "permissionChanges": standard_runtime,
               "crtPatchHook": ("Unmodified pinned SDK startup; targets helper process capabilities and syscall bounds"
                                if standard_runtime else "verified return 0; SDK patch.c excluded; kernel write routines absent"),
-              "policy": "cooperative Shelf closure; after five stuck committed seconds, one exact PPSA99541 origin close; one selected SystemService launch, one exact owner-approved journalled isShelf program update with SHA-256 revalidation, executable-last commit and rollback, owner-visible kernel debug notifications for verification, recovery, installation, rollback, finishing and relaunch, followed only after five continuously observed no-app seconds by exactly one exact-PPSA99541 LncUtil request and up to 30000 ms of running-title observation even when the immediate launch return is negative; the request is never repeated because ShadowMount may already be completing it asynchronously; or after a 3 s post-close settle and a read-only fixed-loopback readiness window of at most 8 s, one fixed tile uninstall, one bounded owned-title removal/artwork batch, or the complete ordered PPSA99700..PPSA99751 residual sweep; readiness polling continuously proves no foreground app and sends no HTTP request; authorization is rechecked before the first mutation; residual cleanup first proves the manual list excludes every protected slot and preflights every global registration as absent or exact platform-owned isShelf identity and artwork before any uninstall; maintenance is paced at 1000 ms and followed by one scan; maintenance retries only the same title after an exact game_active or scanner_busy receipt, five continuous idle seconds, and no observed big app, with at most five retries per title; long maintenance may update only its exact nonce-and-issued status owner; read-only focus observation; no arbitrary process kill, arbitrary-title launch retry or emulator-file writes",
+              "policy": "cooperative Shelf closure; after five stuck committed seconds, one exact PPSA99541 origin close; one selected SystemService launch, one exact owner-approved journalled isShelf program update with SHA-256 revalidation, executable-last commit and rollback, owner-visible kernel debug notifications for verification, recovery, installation, rollback, finishing and relaunch, followed only after 35000 continuously observed no-app milliseconds (one full ShadowMount refresh cadence plus margin) by exactly one exact-PPSA99541 LncUtil request and up to 30000 ms of running-title observation even when the immediate launch return is negative; the request is never repeated because ShadowMount may already be completing it asynchronously; or after a 3 s post-close settle and a read-only fixed-loopback readiness window of at most 8 s, one fixed tile uninstall, one bounded owned-title removal/artwork batch, or the complete ordered PPSA99700..PPSA99751 residual sweep; readiness polling continuously proves no foreground app and sends no HTTP request; authorization is rechecked before the first mutation; residual cleanup first proves the manual list excludes every protected slot and preflights every global registration as absent or exact platform-owned isShelf identity and artwork before any uninstall; maintenance is paced at 1000 ms and followed by one scan; maintenance retries only the same title after an exact game_active or scanner_busy receipt, five continuous idle seconds, and no observed big app, with at most five retries per title; long maintenance may update only its exact nonce-and-issued status owner; read-only focus observation; no arbitrary process kill, arbitrary-title launch retry or emulator-file writes",
               "exactOriginClose": {"titleId": "PPSA99541", "delayMs": 5000,
                                      "attempts": 1, "marker": "ISSHELF_EXACT_ORIGIN_CLOSE_V1"},
               "exactUpdateRelaunch": {"titleId": "PPSA99541", "rounds": 1,
-                                        "attemptsPerRound": 1, "settleMs": 5000,
+                                        "attemptsPerRound": 1, "settleMs": 35000,
                                         "retryMs": 0,
                                         "observeMs": 30000,
                                         "observeNegativeReturn": True,
-                                        "marker": "ISSHELF_EXACT_UPDATE_RELAUNCH_V3"},
+                                        "marker": "ISSHELF_EXACT_UPDATE_RELAUNCH_V4"},
               "updateDebugNotifications": {"style": "kernel-text", "downloadPercent": [25, 50, 75],
                                              "helperStages": ["verify", "recover", "install", "restore", "finish", "relaunch"],
+                                             "idleWarningSeconds": 35,
                                              "marker": "ISSHELF_UPDATE_DEBUG_NOTICES_V1"},
               "approvalForStandardRuntime": "required before console use" if standard_runtime else "not applicable"}
     (output / "build.json").write_text(json.dumps(result, indent=2) + "\n")
