@@ -174,12 +174,12 @@ def public_install_notice(guide, version, installed_name):
     legacy = ("Preparation guide for the first prototype. A public binary has not been published yet; see the "
               "[acceptance status](PROTOTYPE-PLAN.md). New builds are named **isShelf (UI test)**; "
               "earlier console-tested builds used **Console Shelf (UI test)**.")
-    published = re.compile(r"^Native PS5 prototype v[0-9]+\.[0-9]+\.[0-9]+(?:-(?:alpha|beta)\.[0-9]+)?, "
+    published = re.compile(r"^Native PS5 (?:prototype|stable release) v[0-9]+\.[0-9]+\.[0-9]+(?:-(?:alpha|beta)\.[0-9]+)?, "
                            r"tested on firmware \*\*12\.20\*\*\. The app appears as \*\*[^*\r\n]+\*\*\.$", re.M)
     matches = list(published.finditer(guide))
     require(guide.count(legacy) + len(matches) == 1, "Exactly one install-guide release notice is required")
     old = legacy if legacy in guide else matches[0].group()
-    notice = ("Native PS5 prototype " + version + ", tested on firmware **12.20**. "
+    notice = ("Native PS5 stable release " + version + ", tested on firmware **12.20**. "
               "The app appears as **" + installed_name + "**.")
     return guide.replace(old, notice, 1)
 

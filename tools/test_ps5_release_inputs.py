@@ -61,11 +61,11 @@ class ReleaseInputTests(unittest.TestCase):
         old = "Native PS5 prototype v0.1.0-alpha.1, tested on firmware **12.20**. The app appears as **isShelf**."
         instructions = "\n\n## Recovery\nPreserve existing settings and saves.\n"
         result = public_install_notice("# Installing isShelf\n\n" + old + instructions, "v0.1.0-beta.1", "isShelf")
-        self.assertIn("Native PS5 prototype v0.1.0-beta.1, tested on firmware **12.20**.", result)
+        self.assertIn("Native PS5 stable release v0.1.0-beta.1, tested on firmware **12.20**.", result)
         self.assertNotIn("v0.1.0-alpha.1", result)
         self.assertTrue(result.endswith(instructions))
         stable = public_install_notice(result, "v0.1.0", "isShelf")
-        self.assertIn("Native PS5 prototype v0.1.0, tested on firmware **12.20**.", stable)
+        self.assertIn("Native PS5 stable release v0.1.0, tested on firmware **12.20**.", stable)
         self.assertNotIn("v0.1.0-beta.1", stable)
 
     def test_release_notice_accepts_preparation_and_rejects_missing_or_ambiguous_notices(self):
