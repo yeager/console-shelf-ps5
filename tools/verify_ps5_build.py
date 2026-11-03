@@ -280,7 +280,7 @@ def verify(elf_path, self_path):
                 "wcstoull", "wcstold", "wmemcmp", "fputs", "strerror_r", "wcstol",
                 "wmemchr", "swprintf", "strtold", "vfprintf", "strtof"),
             "libkernel": (
-                "__inet_ntop", "fcntl", "read", "write", "pthread_rwlock_unlock",
+                "__inet_ntop", "read", "write", "pthread_rwlock_unlock",
                 "pthread_mutexattr_destroy", "unlink", "pthread_once",
                 "pthread_rwlock_rdlock", "poll", "pthread_rwlock_wrlock"),
             "libSceNet": (

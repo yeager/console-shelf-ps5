@@ -68,18 +68,24 @@ int connect_tcp(int pool, const std::string& host, std::uint16_t port,
     const int receive_buffer = 1024 * 1024;
     (void)::setsockopt(descriptor, SOL_SOCKET, SO_RCVBUF, &receive_buffer,
                       sizeof(receive_buffer));
-    sockaddr_in destination{};
-    destination.sin_family = AF_INET;
-    destination.sin_port = htons(port);
-    destination.sin_addr = address;
-    const int flags = ::fcntl(descriptor, F_GETFL, 0);
-    if (flags < 0 || ::fcntl(descriptor, F_SETFL, flags | O_NONBLOCK) != 0) {
+    // Native PS5 app sockets reject fcntl(F_SETFL) with EACCES. Shelf's
+    // already hardware-proven FTP and local helper transports use the
+    // console's SO_NBIO value instead.
+    constexpr int native_nonblocking = 0x1200; // SO_NBIO
+    const int nonblocking = 1;
+    if (::setsockopt(descriptor, SOL_SOCKET, native_nonblocking, &nonblocking,
+                     sizeof(nonblocking)) != 0) {
         const int socket_error = errno;
         ::close(descriptor);
-        error = "socket setup failed for " + host + " (errno " +
+        error = "socket nonblocking option failed for " + host + " (errno " +
                 std::to_string(socket_error) + ")";
         return -1;
     }
+    sockaddr_in destination{};
+    destination.sin_len = sizeof(destination);
+    destination.sin_family = AF_INET;
+    destination.sin_port = htons(port);
+    destination.sin_addr = address;
     int result = ::connect(descriptor, reinterpret_cast<const sockaddr*>(&destination),
                            sizeof(destination));
     if (result != 0 && errno == EINPROGRESS) {
@@ -98,13 +104,22 @@ int connect_tcp(int pool, const std::string& host, std::uint16_t port,
             result = -1;
         }
     }
-    if (result != 0 || ::fcntl(descriptor, F_SETFL, flags & ~O_NONBLOCK) != 0) {
+    if (result != 0) {
         const int socket_error = errno;
         ::close(descriptor);
         char ip[INET_ADDRSTRLEN]{};
         (void)::inet_ntop(AF_INET, &address, ip, sizeof(ip));
         error = "no connection to " + host + " (" + ip + ":" +
                 std::to_string(port) + ", errno " +
+                std::to_string(socket_error) + ")";
+        return -1;
+    }
+    const int blocking = 0;
+    if (::setsockopt(descriptor, SOL_SOCKET, native_nonblocking, &blocking,
+                     sizeof(blocking)) != 0) {
+        const int socket_error = errno;
+        ::close(descriptor);
+        error = "socket blocking restore failed for " + host + " (errno " +
                 std::to_string(socket_error) + ")";
         return -1;
     }

@@ -202,6 +202,9 @@ class ReleaseInputTests(unittest.TestCase):
         self.assertIn("sceNetResolverCreate", platform)
         self.assertIn("sceNetResolverStartNtoa", platform)
         self.assertIn("sceNetResolverDestroy", platform)
+        self.assertIn("constexpr int native_nonblocking = 0x1200", platform)
+        self.assertIn("destination.sin_len = sizeof(destination)", platform)
+        self.assertNotIn("::fcntl(", platform)
         self.assertNotIn("getaddrinfo", platform)
 
     def test_only_exact_license_newline_difference_is_recorded(self):
