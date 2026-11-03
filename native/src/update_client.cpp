@@ -124,21 +124,34 @@ bool hash_file(const char* name, char (&output)[65], std::uint64_t* bytes = null
 bool read_small(const char* name, char*& output, std::size_t& bytes, std::size_t limit) {
     output = nullptr;
     bytes = 0;
-    std::uint64_t size = 0;
-    if (!regular(name, &size) || !size || size > limit) return false;
-    output = static_cast<char*>(std::malloc(static_cast<std::size_t>(size) + 1));
-    if (!output) return false;
-    FILE* file = std::fopen(name, "rb");
-    bool okay = file && std::fread(output, 1, static_cast<std::size_t>(size), file) == size &&
-                !std::ferror(file);
-    if (file) okay = std::fclose(file) == 0 && okay;
+    if (!name || !limit || limit == SIZE_MAX) return false;
+    // /app0 is a PS5 application mount. Its files are readable through the
+    // opened descriptor even on systems where a preceding lstat of the alias
+    // is unavailable. Open the fixed path once, refuse symlinks, and enforce
+    // the bound from the bytes actually read instead of trusting pathname
+    // metadata in a separate check/use step.
+    const int file = open(name, O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
+    if (file < 0) return false;
+    output = static_cast<char*>(std::malloc(limit + 1));
+    bool okay = output != nullptr;
+    std::size_t used = 0;
+    while (okay && used <= limit) {
+        const auto count = read(file, output + used, limit + 1 - used);
+        if (count > 0) {
+            used += static_cast<std::size_t>(count);
+            continue;
+        }
+        if (count == 0) break;
+        if (errno != EINTR) okay = false;
+    }
+    okay = close(file) == 0 && okay && used > 0 && used <= limit;
     if (!okay) {
         std::free(output);
         output = nullptr;
         return false;
     }
-    output[size] = 0;
-    bytes = static_cast<std::size_t>(size);
+    output[used] = 0;
+    bytes = used;
     return true;
 }
 bool write_atomic(const char* target, const char* temporary, const char* bytes, std::size_t size) {

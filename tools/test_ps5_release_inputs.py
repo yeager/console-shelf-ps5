@@ -169,6 +169,17 @@ class ReleaseInputTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "provenance records"):
             verify_asset_sources({"assets/update-ca.pem": raw}, {})
 
+    def test_ps5_update_reader_opens_app_mount_before_bounded_read(self):
+        source = (Path(__file__).parents[1] / "native/src/update_client.cpp").read_text()
+        match = re.search(r"bool read_small\(.*?\n\}\n(?=bool write_atomic)", source, re.S)
+        self.assertIsNotNone(match)
+        body = match.group(0)
+        self.assertIn("open(name, O_RDONLY | O_NOFOLLOW | O_CLOEXEC)", body)
+        self.assertIn("limit + 1 - used", body)
+        self.assertIn("used > 0 && used <= limit", body)
+        self.assertNotIn("regular(name", body)
+        self.assertNotIn("lstat(", body)
+
     def test_only_exact_license_newline_difference_is_recorded(self):
         result = verify_asset_sources({"LICENSE": b"fixture license\r\n"}, {"LICENSE": b"fixture license\n"})
         self.assertEqual(result["byteExactFiles"], 0)
