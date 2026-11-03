@@ -25,3 +25,7 @@ native/third_party/licenses/* -text -whitespace
 native/assets/fonts/* -text -whitespace
 native/third_party/ps5-runtime/** -text -whitespace
 native/third_party/ps5-runtime/SOURCE.json text eol=lf
+# These are exact packaged forwarder inputs; preserve their reviewed bytes.
+assets/console-tiles/catalog.json -text -whitespace
+assets/console-tiles/LICENSE-forwarder.txt -text -whitespace
+assets/console-tiles/template/param.json -text -whitespace

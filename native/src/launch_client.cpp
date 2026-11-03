@@ -102,7 +102,12 @@ bool wait_socket(Socket fd, SDL_atomic_t& cancelled) {
     }
     return false;
 }
-bool transfer(unsigned short port, const unsigned char* data, std::size_t size, SDL_atomic_t& cancelled) {
+bool transfer(unsigned short port, const unsigned char* data, std::size_t size, SDL_atomic_t& cancelled,
+              unsigned max_duration_ms = 0) {
+    const auto began = SDL_GetTicks();
+    const auto expired = [&]() {
+        return max_duration_ms && SDL_GetTicks() - began >= max_duration_ms;
+    };
 #ifdef _WIN32
     WSADATA state;
     if (WSAStartup(MAKEWORD(2, 2), &state) != 0)
@@ -147,6 +152,7 @@ bool transfer(unsigned short port, const unsigned char* data, std::size_t size, 
     address.sin_family = AF_INET;
     address.sin_port = htons(port);
     address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    if (expired()) return false;
     if (connect(fd, reinterpret_cast<const sockaddr*>(&address), sizeof(address)) != 0) {
 #ifdef _WIN32
         const int error = WSAGetLastError();
@@ -156,7 +162,7 @@ bool transfer(unsigned short port, const unsigned char* data, std::size_t size, 
         if (errno != EINPROGRESS)
             return false;
 #endif
-        if (!wait_socket(fd, cancelled))
+        if (expired() || !wait_socket(fd, cancelled) || expired())
             return false;
     }
     int error = 0;
@@ -170,7 +176,7 @@ bool transfer(unsigned short port, const unsigned char* data, std::size_t size, 
         return false;
 #endif
     while (size) {
-        if (SDL_AtomicGet(&cancelled) || !wait_socket(fd, cancelled))
+        if (SDL_AtomicGet(&cancelled) || expired() || !wait_socket(fd, cancelled) || expired())
             return false;
         const auto chunk = std::min<std::size_t>(size, 65536);
 #ifdef MSG_NOSIGNAL
@@ -191,6 +197,16 @@ bool transfer(unsigned short port, const unsigned char* data, std::size_t size, 
 #endif
 }
 } // namespace
+bool send_probe_elf_once(const unsigned char* bytes, std::size_t size, SDL_atomic_t& cancelled,
+                         unsigned short test_port) {
+    if (!bytes || size < 64 || size > 1048576 ||
+        std::memcmp(bytes, "\x7f" "ELF\x02\x01\x01\x00", 8) != 0 || !test_port)
+        return false;
+#ifdef SHELF_PS5
+    if (test_port != 9021) return false;
+#endif
+    return transfer(test_port, bytes, size, cancelled, 5000);
+}
 LaunchClient::~LaunchClient() {
     stop();
 }
@@ -255,7 +271,7 @@ int LaunchClient::run(void* raw) {
     std::size_t size;
     if (read(target, data, 256, size) && parse_launch_status({data, size}, now(), previous) &&
         (previous.stage == LaunchStage::ready || previous.stage == LaunchStage::committed ||
-         previous.stage == LaunchStage::sending || previous.stage == LaunchStage::unconfirmed)) {
+         previous.stage == LaunchStage::sending)) {
         client.failed("An earlier launch is still pending. Wait a moment and try again.");
         return 1;
     }

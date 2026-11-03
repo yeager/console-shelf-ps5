@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "shelf/ftp.hpp"
+#include "shelf/artwork.hpp"
+#include "shelf/console_tile_job_pin.hpp"
 #include "shelf/json.hpp"
 #include "shelf/memory.hpp"
 #include <algorithm>
@@ -57,14 +59,33 @@ bool in_root(std::string_view path, std::string_view root) {
 bool allowed_path(const char* path) {
     if (!path || !valid_virtual_path(path))
         return false;
+    if (std::strcmp(path, "/data/PSXS5") == 0 || std::strcmp(path, "/data/PCSX2") == 0)
+        return true; // List metadata parents, without admitting their other files for reads.
     for (const char* root :
-         {"/data/homebrew", "/user/app", "/data/PCSX2/games", "/data/PSXS5/games", "/data/SwanStationPS5/games"})
+         {"/data/homebrew", "/user/app", "/data/PCSX2/games", "/data/PSXS5/games", "/data/SwanStationPS5/games",
+          "/data/psswanstation/games", "/data/PSXS5/covers", "/data/PSXS5/library.txt",
+          "/data/PCSX2/covers", "/data/PCSX2/chd-serials.txt", "/data/psswanstation/covers", "/data/SwanStationPS5/covers"})
         if (in_root(path, root))
             return true;
     return false;
 }
 bool readable(const char* path, std::uint64_t offset, std::size_t cap) {
     const std::string_view name(path);
+    constexpr std::string_view tile_root = "/data/homebrew/";
+    if (offset == 0 && cap <= 4096 && name.size() > tile_root.size() &&
+        std::memcmp(name.data(), tile_root.data(), tile_root.size()) == 0) {
+        const std::string_view rest(name.data() + tile_root.size(), name.size() - tile_root.size());
+        const auto slash = rest.find('/');
+        if (slash != rest.npos) {
+            const std::string_view title(rest.data(), slash);
+            const std::string_view leaf(rest.data() + slash, rest.size() - slash);
+            if (tile_job::owned_title_known(title) &&
+                (leaf == "/isshelf-console-tile.json" || leaf == "/forwarder.json"))
+                return true;
+        }
+    }
+    if (offset == 0 && cap <= 8 * 1024 * 1024 && valid_artwork_source(name)) return true;
+    if (offset == 0 && cap <= 65536 && (name == "/data/PSXS5/library.txt" || name == "/data/PCSX2/chd-serials.txt")) return true;
     const auto dot = name.rfind('.');
     const auto ext = dot == name.npos ? std::string_view{} : std::string_view(name.data() + dot, name.size() - dot);
     char folded[16]{};
@@ -366,6 +387,12 @@ Directory* get_directory(ReadOnlyFtp& client, const char* path) {
         return dir;
     }
     const Socket saved = connection.control;
+    // A fast server may send both 150 and 226 in one control read. Directory
+    // data has its own buffer; preserve unread control replies across the switch.
+    char pending_control[4096];
+    const int pending_bytes = connection.end - connection.begin;
+    std::memcpy(pending_control, connection.buffer + connection.begin, static_cast<std::size_t>(pending_bytes));
+    connection.begin = connection.end = 0;
     connection.control = connection.data;
     connection.data = invalid_socket;
     char line[2048];
@@ -434,7 +461,9 @@ Directory* get_directory(ReadOnlyFtp& client, const char* path) {
     }
     close_socket(connection.control);
     connection.control = saved;
-    connection.begin = connection.end = 0;
+    std::memcpy(connection.buffer, pending_control, static_cast<std::size_t>(pending_bytes));
+    connection.begin = 0;
+    connection.end = pending_bytes;
     const int finish = connection.reply(response, sizeof(response));
     if (dir->status != FsStatus::limit)
         dir->status = valid && eof && (finish == 226 || finish == 250) ? FsStatus::ok : FsStatus::failed;

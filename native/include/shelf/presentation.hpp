@@ -4,8 +4,13 @@
 #include <cstdint>
 namespace shelf {
 inline constexpr std::uint32_t close_hold_ms = 3000;
+inline constexpr std::uint32_t opening_entrance_ms = 360;
+inline constexpr std::uint32_t opening_reveal_ms = 520;
+inline constexpr std::uint32_t close_fade_ms = 240;
 // Only the hardware layer moves. The room and wood are rendered separately.
 class ShelfPageMotion {
+    static constexpr float duration_ms = 260.f;
+    static constexpr float handoff = .38f;
     std::uint32_t began = 0;
   public:
     int from = 0, target = 0, direction = 1;
@@ -28,19 +33,19 @@ class ShelfPageMotion {
             began = now;
             active = true;
         }
-        progress = active ? std::min(1.f, static_cast<std::uint32_t>(now - began) / 380.f) : 1;
+        progress = active ? std::min(1.f, static_cast<std::uint32_t>(now - began) / duration_ms) : 1;
         if (progress >= 1)
             active = false;
     }
-    bool outgoing() const { return active && progress < .42f; }
+    bool outgoing() const { return active && progress < handoff; }
     int page() const { return outgoing() ? from : target; }
     float fraction() const {
-        const float t = outgoing() ? progress / .42f : (progress - .42f) / .58f;
+        const float t = outgoing() ? progress / handoff : (progress - handoff) / (1.f - handoff);
         const float clamped = std::max(0.f, std::min(1.f, t));
         return clamped * clamped * (3 - 2 * clamped);
     }
     float opacity() const { return !active ? 1 : outgoing() ? 1 - fraction() : fraction(); }
-    float offset() const { return !active ? 0 : direction * 190.f * (outgoing() ? -fraction() : 1 - fraction()); }
+    float offset() const { return !active ? 0 : direction * 130.f * (outgoing() ? -fraction() : 1 - fraction()); }
 };
 struct Presentation {
     bool loading = false, preparing = false, artwork = false;
@@ -71,7 +76,7 @@ class CloseHint {
     }
 };
 class OpeningGate {
-    bool unknown = false, foreground = false, fallback = false;
+    bool unknown = false, foreground = false, fallback = false, owner_input = false;
     std::uint32_t unknown_at = 0, visible_at = 0;
 
   public:
@@ -95,14 +100,62 @@ class OpeningGate {
             }
         }
     }
+    // A physical controller/key event delivered to isShelf is an explicit
+    // owner escape from a stale visibility report. Keep the same short stable
+    // interval as a normal foreground transition, then reveal the controls.
+    // This is deliberately separate from the automatic status-error fallback:
+    // remote requests and background work cannot trigger it.
+    void allow_owner_input(std::uint32_t now) {
+        if (!owner_input && !foreground && !fallback) {
+            owner_input = true;
+            visible_at = now;
+        }
+    }
     bool ready(std::uint32_t now) const {
-        return (foreground || fallback) && static_cast<std::uint32_t>(now - visible_at) >= 120;
+        return (foreground || fallback || owner_input) &&
+               static_cast<std::uint32_t>(now - visible_at) >= 120;
     }
     std::uint32_t age(std::uint32_t now) const {
-        return foreground || fallback ? static_cast<std::uint32_t>(now - visible_at) : 0;
+        return foreground || fallback || owner_input
+                   ? static_cast<std::uint32_t>(now - visible_at)
+                   : 0;
     }
     bool used_fallback() const {
         return fallback;
+    }
+    bool used_owner_input() const {
+        return owner_input;
+    }
+};
+enum class LaunchVisibilityDecision { wait, commit, cancel };
+class LaunchVisibilityGate {
+    bool active = false, foreground = false;
+    std::uint32_t began = 0, foreground_at = 0;
+
+  public:
+    void reset() {
+        active = foreground = false;
+        began = foreground_at = 0;
+    }
+    LaunchVisibilityDecision sample(std::uint32_t now, int status, unsigned flags) {
+        if (!active) {
+            active = true;
+            began = now;
+        }
+        const bool next_foreground = status == 0 && flags == 0;
+        if (next_foreground && !foreground)
+            foreground_at = now;
+        foreground = next_foreground;
+        // One transient clear sample is not enough: keep the helper in its
+        // ready state until isShelf has remained unobscured for 120 ms.
+        if (foreground && static_cast<std::uint32_t>(now - foreground_at) >= 120)
+            return LaunchVisibilityDecision::commit;
+        // The helper independently checks that isShelf remains the running
+        // big app. This app-side bound only gives short system overlays time
+        // to clear; it never retries a launch or authorizes a background app.
+        if (static_cast<std::uint32_t>(now - began) >= 5000)
+            return LaunchVisibilityDecision::cancel;
+        return LaunchVisibilityDecision::wait;
     }
 };
 class CloseGesture {
@@ -147,7 +200,7 @@ class CloseGesture {
             committed_at = now;
         }
         view.hold = down ? std::min(1.0f, elapsed / static_cast<float>(close_hold_ms)) : 0;
-        const float t = committed ? std::min(1.0f, (now - committed_at) / 360.0f) : 0;
+        const float t = committed ? std::min(1.0f, (now - committed_at) / static_cast<float>(close_fade_ms)) : 0;
         view.close = t * t * (3 - 2 * t);
     }
     bool closing() const {
@@ -157,7 +210,7 @@ class CloseGesture {
         return down || committed;
     }
     bool finished(std::uint32_t now) const {
-        return committed && static_cast<std::uint32_t>(now - committed_at) >= 360;
+        return committed && static_cast<std::uint32_t>(now - committed_at) >= close_fade_ms;
     }
 };
 } // namespace shelf

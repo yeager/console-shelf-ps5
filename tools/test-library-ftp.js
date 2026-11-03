@@ -22,6 +22,24 @@ file('/data/homebrew/PPSA99169/content/n64/Example game.z64', Buffer.from('80371
 file('/data/homebrew/PPSA99169/retroarch.cfg', 'PRIVATE - must never be read');
 file('/user/app/PPSA12345/sce_sys/param.json', JSON.stringify({ titleId: 'PPSA12345', localizedParameters: { 'en-US': { titleName: 'Registered example' } } }));
 file('/user/app/PPSA12345/mount.lnk', 'a mount marker, not a launch guarantee');
+file('/data/homebrew/PPSA12345/isshelf-console-tile.json', 'PRIVATE - unrelated title marker must not be read');
+file('/user/app/PPSA99704/sce_sys/param.json', JSON.stringify({ titleId: 'PPSA99704', titleName: 'PlayStation 1 shortcut' }));
+file('/user/app/PPSA99704/mount.lnk', 'a shortcut mount marker');
+file('/data/homebrew/PPSA99704/isshelf-console-tile.json', JSON.stringify({
+  format: 'isshelf-console-tile/1', system: 'ps1', titleId: 'PPSA99704', target: 'PPSA99541',
+  forwarderSource: 'https://github.com/heydemoura/ps5-forwarder-format',
+  forwarderCommit: '22e8762ad7dbd01e18bd8c0e95f86461fdf8aaf4'
+}));
+file('/data/homebrew/PPSA99704/forwarder.json', JSON.stringify({ format: 'ps5-forwarder/1', target: 'PPSA99541' }));
+file('/user/app/PPSA99248/eboot.bin', 'PSSwanStation - must never be downloaded');
+file('/user/app/PPSA99248/sce_sys/param.json', JSON.stringify({ titleId: 'PPSA99248', titleName: 'PSSwanStation' }));
+file('/data/psswanstation/games/Own PS1 game.chd', 'MComprHD');
+file('/data/psswanstation/data/frontend.cfg', 'PRIVATE - must never be read');
+const coverFixture = fs.readFileSync(path.join(root,'assets/branding/isshelf-home-icon.png'));
+file('/data/psswanstation/covers/Own PS1 game.png', coverFixture);
+file('/data/psswanstation/covers/Own PS1 game_spine.png', coverFixture);
+file('/user/app/PPSA12345/sce_sys/icon0.png', coverFixture);
+file('/data/homebrew/PPSA99169/thumbnails/Nintendo - Nintendo 64/Named_Boxarts/Example game.png', 'CORRUPT OPTIONAL ART');
 function list(folder) {
   const rows = [];
   for (const [name, data] of files) if (path.posix.dirname(name) === folder) rows.push(`${data === null ? 'd' : '-'}rwxr-xr-x 1 root wheel ${data === null ? 0 : data.length} Oct 25 12:00 ${path.posix.basename(name)}\r\n`);
@@ -36,7 +54,7 @@ function run(args) {
     child.on('error', reject); child.on('close', code => { clearTimeout(timeout); resolve({ code, stdout, stderr }); });
   });
 }
-async function scenario(pasv, malformed = false, background = false) {
+async function scenario(pasv, malformed = false, background = false, coalesced = false) {
   const commands = [], sockets = new Set(), passiveServers = new Set();
   let failure;
   const server = net.createServer(socket => {
@@ -64,11 +82,13 @@ async function scenario(pasv, malformed = false, background = false) {
         } else if (verb === 'REST') { rest = Number(arg); socket.write('350 Offset accepted\r\n'); }
         else if (verb === 'LIST' || verb === 'RETR') {
           if (!files.has(arg) || (verb === 'LIST' ? files.get(arg) !== null : files.get(arg) === null)) { socket.write('550 No such file or directory\r\n'); dataConnection?.end(); continue; }
-          if (verb === 'RETR' && !arg.endsWith('/sce_sys/param.json') && !arg.endsWith('.z64')) { failure = Error('Unexpected file read: ' + arg); socket.destroy(); continue; }
-          socket.write('150 Data follows\r\n');
+          if (verb === 'RETR' && !arg.endsWith('/sce_sys/param.json') && !arg.endsWith('.z64') && !arg.endsWith('.chd') && !arg.endsWith('.png') &&
+              !['/data/homebrew/PPSA99704/isshelf-console-tile.json', '/data/homebrew/PPSA99704/forwarder.json'].includes(arg)) { failure = Error('Unexpected file read: ' + arg); socket.destroy(); continue; }
+          const combined=coalesced && verb==='LIST';
+          socket.write(combined ? '150 Data follows\r\n226 Complete\r\n' : '150 Data follows\r\n');
           const send = () => {
             const payload = verb === 'LIST' ? Buffer.from(list(arg) + (malformed && arg === '/data/PCSX2/games' ? 'truncated' : '')) : files.get(arg).subarray(rest);
-            dataConnection.end(payload, () => { if (!socket.destroyed) socket.write('226 Complete\r\n'); });
+            dataConnection.end(payload, () => { if (!socket.destroyed && !combined) socket.write('226 Complete\r\n'); });
           };
           if (dataConnection) send(); else dataReady = send;
         }
@@ -79,17 +99,32 @@ async function scenario(pasv, malformed = false, background = false) {
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   try {
     const result = await run(['--library-ftp', '127.0.0.1', '--library-port', String(server.address().port),
-      ...(background ? ['--background-scan', '--script', 'shot:async-loading.png,wait:1000,frame:1200,report:async-library.json'] : ['--scan-only'])]);
+      ...(background ? ['--background-scan', '--script', 'shot:async-loading.png,wait:1500,wait:1500,frame:1200,report:async-library.json'] : ['--scan-only'])]);
     if (failure) throw failure;
     assert.equal(result.code, malformed ? 2 : 0, result.stderr + result.stdout);
-    assert.match(result.stdout, /2 games, 1 emulator\/core routes/);
+    assert.match(result.stdout, /3 games, 2 emulator\/core routes/);
+    assert.match(result.stdout, /ps1: 1 games, 1 routes/);
     assert.match(result.stdout, /n64: 1 games, 1 routes/);
     assert.match(result.stdout, /ps5: 1 games, 0 routes/);
+    assert.match(result.stdout, /Library artwork: 3 sources; 2 cached; 0 missing; 1 unreadable/,
+      'valid artwork is resized and cached; corrupt optional artwork never hides a game or fails discovery');
+    const artIndex=JSON.parse(fs.readFileSync(path.join(owned,'covers/index.json')));
+    assert.equal(artIndex.games.find(game=>game.system==='ps1').spineReady,true,'a separate existing spine is cached without treating it as front artwork');
+    assert.equal(artIndex.games.find(game=>game.system==='ps5').kind,2,'a native app icon remains identified as an icon');
+    assert.equal(artIndex.games.filter(game=>game.ready).length,2);
+    for(const game of artIndex.games.filter(game=>game.ready)){
+      const bytes=fs.readFileSync(path.join(owned,'covers',game.key+'.png'));
+      assert.equal(bytes.readUInt32BE(16),960);
+      assert.equal(bytes.readUInt32BE(20),960);
+    }
     if (!background) assert.match(result.stdout, malformed ? /first failure listing data \(226\)/ : /first failure none \(0\)/,
       'the bounded diagnostic distinguishes a malformed transfer from successful discovery');
-    if (background) assert.equal(JSON.parse(fs.readFileSync(path.join(owned,'async-library.json'))).libraryGames,2,
+    if (background) assert.equal(JSON.parse(fs.readFileSync(path.join(owned,'async-library.json'))).libraryGames,3,
       'a finished worker commits its inventory to the interface');
     assert.ok(commands.some(c => c.verb === 'RETR'));
+    assert.ok(commands.some(c => c.verb === 'RETR' && c.arg === '/data/homebrew/PPSA99704/isshelf-console-tile.json'));
+    assert.ok(commands.some(c => c.verb === 'RETR' && c.arg === '/data/homebrew/PPSA99704/forwarder.json'));
+    assert.ok(!commands.some(c => c.verb === 'RETR' && c.arg === '/data/homebrew/PPSA12345/isshelf-console-tile.json'));
     if (pasv) assert.ok(commands.some(c => c.verb === 'PASV'), 'PASV fallback should use original peer, not advertised external IP');
   } finally {
     for (const socket of sockets) socket.destroy();
@@ -111,7 +146,7 @@ async function cancelledGreeting() {
   } finally { for (const peer of peers) peer.destroy(); await new Promise(resolve=>server.close(resolve)); }
 }
 (async () => {
-  await scenario(false); await scenario(true); await scenario(false, true);
+  await scenario(false); await scenario(true); await scenario(false, true); await scenario(false,false,false,true);
   await scenario(false,false,true); await cancelledGreeting();
   assert.equal((await run(['--library-ftp', 'example.com', '--scan-only'])).code, 1, 'no hostname resolution');
   console.log('PASS: bounded read-only FTP, EPSV/PASV pinning, metadata, malformed listing refusal, background inventory commit, responsive scan cancellation and no hostname lookup.');

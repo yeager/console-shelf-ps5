@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "shelf/library.hpp"
+#include "shelf/artwork.hpp"
+#include "shelf/console_tile_job_pin.hpp"
 #include "shelf/json.hpp"
 #include "shelf/memory.hpp"
 #include <algorithm>
@@ -503,7 +505,8 @@ static const App apps[] = {{"PPSA99169", "RetroArch", ""},
                            {"PPSA99360", "PS5-ECAM", "wiiu|3ds|ds"},
                            {"PPSA99064", "Mupen64", "n64"},
                            {"PPSA99247", "Flycast", "dreamcast|naomi|atomiswave"},
-                           {"PPSA98510", "SwanStation", "ps1"}};
+                           {"PPSA98510", "SwanStationPS5", "ps1"},
+                           {"PPSA99248", "PSSwanStation", "ps1"}};
 bool known_utility(std::string_view title) {
     if (one_of(title, "PPSA99000|PPSA90210|PPSA77305|PPSA99995|PPSA99310|PPSA98001|PPSA75837|PPSA99841|PPSA99109|"
                       "PPSA99350|PPSA99230|PPSA99058|PPSA99541"))
@@ -512,6 +515,31 @@ bool known_utility(std::string_view title) {
         if (title == app.id)
             return true;
     return false;
+}
+bool owned_console_shortcut(const ReadOnlyFs& fs, const char* title) {
+    if (!tile_job::owned_title_known(title))
+        return false;
+    char root[path_capacity], path[path_capacity];
+    if (!join_media_path("/data/homebrew", title, root, sizeof(root)) ||
+        !join_media_path(root, "isshelf-console-tile.json", path, sizeof(path)))
+        return false;
+    JsonDocument marker;
+    if (!marker.read(fs, path, 4096) ||
+        std::strcmp(json_string(marker.root, "format"), "isshelf-console-tile/1") ||
+        std::strcmp(json_string(marker.root, "titleId"), title) ||
+        std::strcmp(json_string(marker.root, "target"), "PPSA99541") ||
+        std::strcmp(json_string(marker.root, "forwarderSource"),
+                    "https://github.com/heydemoura/ps5-forwarder-format") ||
+        std::strcmp(json_string(marker.root, "forwarderCommit"),
+                    "22e8762ad7dbd01e18bd8c0e95f86461fdf8aaf4") ||
+        find_system(json_string(marker.root, "system")) == system_count)
+        return false;
+    if (!join_media_path(root, "forwarder.json", path, sizeof(path)))
+        return false;
+    JsonDocument forwarder;
+    return forwarder.read(fs, path, 4096) &&
+           !std::strcmp(json_string(forwarder.root, "format"), "ps5-forwarder/1") &&
+           !std::strcmp(json_string(forwarder.root, "target"), "PPSA99541");
 }
 void native_titles(const ReadOnlyFs& fs, Library& out) {
     struct Context {
@@ -529,6 +557,11 @@ void native_titles(const ReadOnlyFs& fs, Library& out) {
                 return true;
             char root[path_capacity], path[path_capacity], title[256]{}, id[32]{};
             if (!join_media_path("/user/app", name, root, sizeof(root)))
+                return true;
+            // An isShelf console shortcut is a launcher, not a native PS5 game.
+            // Verify its owned source and forwarder metadata; never exclude a
+            // title merely because its ID falls in our preferred allocation range.
+            if (ps5 && owned_console_shortcut(*c.fs, name))
                 return true;
             if (ps5) {
                 if (!join_media_path(root, "sce_sys/param.json", path, sizeof(path)))
@@ -698,7 +731,10 @@ void discover_library(const ReadOnlyFs& fs, Library& out) {
     scanner.scan("/data/PCSX2/games", find_system("ps2"));
     scanner.scan("/data/PSXS5/games", find_system("ps1"));
     scanner.scan("/data/SwanStationPS5/games", find_system("ps1"));
+    scanner.scan("/data/homebrew/PPSA99248/games", find_system("ps1"));
+    scanner.scan("/data/psswanstation/games", find_system("ps1"));
     ps3_folder(checked, out, "/data/homebrew/PPSA99303/rpcs3/games");
+    discover_artwork(fs, out);
     for (std::size_t i = 0; i < out.game_count; ++i)
         ++out.inventory[out.games[i].system].game_count;
     std::sort(out.games.begin(), out.games.begin() + out.game_count, [](const LibraryGame& a, const LibraryGame& b) {

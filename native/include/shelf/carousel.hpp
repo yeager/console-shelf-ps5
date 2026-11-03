@@ -25,13 +25,15 @@ inline OrbitPose orbit_pose(double offset, double width) {
             depth < 4};
 }
 struct OrbitMotion {
+    static constexpr double duration_ms = 260.0;
     double position = 0, target = 0, from = 0, start = 0;
     bool active = false;
     void update(double time) {
         if (!active)
             return;
-        const double progress = std::clamp((time - start) / 420, 0.0, 1.0);
-        position = from + (target - from) * (1 - std::pow(1 - progress, 4));
+        const double progress = std::clamp((time - start) / duration_ms, 0.0, 1.0);
+        const double eased = 1 - std::pow(1 - progress, 3);
+        position = from + (target - from) * eased;
         if (progress == 1) {
             position = target;
             active = false;

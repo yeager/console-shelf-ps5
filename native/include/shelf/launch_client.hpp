@@ -5,6 +5,10 @@
 #include <cstddef>
 
 namespace shelf {
+// Sends exactly one bounded ELF to the fixed loopback payload loader. It does
+// not create a game launch request, commit a handoff, or request app exit.
+bool send_probe_elf_once(const unsigned char* bytes, std::size_t size, SDL_atomic_t& cancelled,
+                         unsigned short test_port = 9021);
 enum class LaunchClientState { idle, sending, ready, failed, cancelled, committed };
 // Console integration uses only its fixed owned directory and the existing
 // loopback ELF loader. Host tests supply a synthetic packet to a local fixture.

@@ -19,6 +19,7 @@
 #pragma warning(push, 0)
 #endif
 #define STBI_ONLY_PNG
+#define STBI_ONLY_JPEG
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb/stb_image.h"
 #define STB_TRUETYPE_IMPLEMENTATION

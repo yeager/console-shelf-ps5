@@ -1,0 +1,430 @@
+{
+  "format": "isshelf-console-tile-assets/1",
+  "forwarderCommit": "22e8762ad7dbd01e18bd8c0e95f86461fdf8aaf4",
+  "forwarderSource": "https://github.com/heydemoura/ps5-forwarder-format",
+  "runtime": "isshelf-cooperative-forwarder/3",
+  "systems": [
+    {
+      "badge": "PS5",
+      "iconBytes": 232803,
+      "iconSha256": "088ceeadbd4ba7a3c295023b8110a2c35fff5a57029ad30a5b774c53b45129f4",
+      "id": "ps5",
+      "name": "PlayStation 5",
+      "preferredTitleId": "PPSA99700"
+    },
+    {
+      "badge": "PS4",
+      "iconBytes": 233804,
+      "iconSha256": "302988070d9da1e8c4b68b1eaf7b80fa6b361df578e435f3f0fab5a17820a4ec",
+      "id": "ps4",
+      "name": "PlayStation 4",
+      "preferredTitleId": "PPSA99701"
+    },
+    {
+      "badge": "PS3",
+      "iconBytes": 249735,
+      "iconSha256": "9f4f31fd56ccf5fc5a255449489018737db5c65ed4ee0b3dec781fe762bc2538",
+      "id": "ps3",
+      "name": "PlayStation 3",
+      "preferredTitleId": "PPSA99702"
+    },
+    {
+      "badge": "PS2",
+      "iconBytes": 251177,
+      "iconSha256": "2355780a55ebb2d5c9511fc4e8eb00795725b8aa71095ce4fdacd86504784e59",
+      "id": "ps2",
+      "name": "PlayStation 2",
+      "preferredTitleId": "PPSA99703"
+    },
+    {
+      "badge": "PS1",
+      "iconBytes": 267382,
+      "iconSha256": "1d68e533006bea5db8b7085df1fd8f13d95ac0296e5c959c93f0311b874ca84f",
+      "id": "ps1",
+      "name": "PlayStation 1",
+      "preferredTitleId": "PPSA99704"
+    },
+    {
+      "badge": "PSP",
+      "iconBytes": 265615,
+      "iconSha256": "d8eb59ffded7e7be3f70071fe0674719d153694c86fbca1b200f1fc2bf2e751e",
+      "id": "psp",
+      "name": "PSP",
+      "preferredTitleId": "PPSA99705"
+    },
+    {
+      "badge": "SWITCH 2",
+      "iconBytes": 228875,
+      "iconSha256": "6e2efd4264911735ba5ec8c826612d38522e27fc77eeae97999811463bb71955",
+      "id": "switch2",
+      "name": "Nintendo Switch 2",
+      "preferredTitleId": "PPSA99706"
+    },
+    {
+      "badge": "SWITCH",
+      "iconBytes": 248603,
+      "iconSha256": "7f35ee906a91a8a0b45ce715c0457d61279bf60599369583989cc127a43f0f3d",
+      "id": "switch",
+      "name": "Nintendo Switch",
+      "preferredTitleId": "PPSA99707"
+    },
+    {
+      "badge": "WII U",
+      "iconBytes": 237154,
+      "iconSha256": "d016bd44942fa773566f68528f141b0480842071d767bd58a71001778f56d7ab",
+      "id": "wiiu",
+      "name": "Wii U",
+      "preferredTitleId": "PPSA99708"
+    },
+    {
+      "badge": "WII",
+      "iconBytes": 251194,
+      "iconSha256": "1259bff866e4f4851e5d43ffa3c21d53aa3817e3bd2008b167920039ba872e54",
+      "id": "wii",
+      "name": "Wii",
+      "preferredTitleId": "PPSA99709"
+    },
+    {
+      "badge": "GAMECUBE",
+      "iconBytes": 273561,
+      "iconSha256": "1a9273746ac67bf08c6d26dd1da285bf84638f8767455e05442f46375cc73b5d",
+      "id": "gamecube",
+      "name": "GameCube",
+      "preferredTitleId": "PPSA99710"
+    },
+    {
+      "badge": "N64",
+      "iconBytes": 275553,
+      "iconSha256": "a3767a94879ff57a9723239a4f8f185550b8d6df3ca28a331f5e435e945ee7e5",
+      "id": "n64",
+      "name": "Nintendo 64",
+      "preferredTitleId": "PPSA99711"
+    },
+    {
+      "badge": "3DS",
+      "iconBytes": 286178,
+      "iconSha256": "8163b589cdc76e0f352ea1aa5211919b65d715885a2dbca784ba465f9518dd1f",
+      "id": "3ds",
+      "name": "Nintendo 3DS",
+      "preferredTitleId": "PPSA99712"
+    },
+    {
+      "badge": "DS",
+      "iconBytes": 298544,
+      "iconSha256": "9745d1c1b7cf3562449ab1c13b7159b7e10d9860a729a130b3029e557c1ed764",
+      "id": "ds",
+      "name": "Nintendo DS",
+      "preferredTitleId": "PPSA99713"
+    },
+    {
+      "badge": "GBA",
+      "iconBytes": 275042,
+      "iconSha256": "ed64d2297f550da5c61562a8a8fe14a68afe17b55808e647319a6265115c647b",
+      "id": "gba",
+      "name": "Game Boy Advance",
+      "preferredTitleId": "PPSA99714"
+    },
+    {
+      "badge": "GBC",
+      "iconBytes": 308273,
+      "iconSha256": "7ee3d66ca154bf927cf4e846295a15f58ea947ab8a2685fb95e08fa3e257862d",
+      "id": "gbc",
+      "name": "Game Boy Color",
+      "preferredTitleId": "PPSA99715"
+    },
+    {
+      "badge": "GB",
+      "iconBytes": 270046,
+      "iconSha256": "1023d25355d3e83e905f7e2a4313fbda54ab5c3e54c72e63fef3e75f5c9113a8",
+      "id": "gb",
+      "name": "Game Boy",
+      "preferredTitleId": "PPSA99716"
+    },
+    {
+      "badge": "SNES",
+      "iconBytes": 266077,
+      "iconSha256": "e4eefb3a1f92539c0635d907427a55b98ab18accf819944d263b61351091ae0f",
+      "id": "snes",
+      "name": "Super Nintendo",
+      "preferredTitleId": "PPSA99717"
+    },
+    {
+      "badge": "NES",
+      "iconBytes": 261773,
+      "iconSha256": "b470cae9b779233549ca21f8ee4990a4278dbca93366bd7f716eabee1cec422e",
+      "id": "nes",
+      "name": "NES",
+      "preferredTitleId": "PPSA99718"
+    },
+    {
+      "badge": "FDS",
+      "iconBytes": 315445,
+      "iconSha256": "3c7c8db7c2961becc28bd5903bb3240adbe963b256e60c50bdeb8db6624c1c2d",
+      "id": "fds",
+      "name": "Famicom Disk System",
+      "preferredTitleId": "PPSA99719"
+    },
+    {
+      "badge": "VIRTUAL BOY",
+      "iconBytes": 279396,
+      "iconSha256": "8dc03b9bffe5f95df2ff0509116ba7e31ff51ab68e7fe82a89e659a116f7a723",
+      "id": "virtualboy",
+      "name": "Virtual Boy",
+      "preferredTitleId": "PPSA99720"
+    },
+    {
+      "badge": "POKÉMON MINI",
+      "iconBytes": 309088,
+      "iconSha256": "ac34b9c5a266c0caa124b1a55d05ae006f977fe2b5a0dc76b74155ddae719985",
+      "id": "pokemonmini",
+      "name": "Pokémon mini",
+      "preferredTitleId": "PPSA99721"
+    },
+    {
+      "badge": "DREAMCAST",
+      "iconBytes": 259535,
+      "iconSha256": "d8f223050032ac94666ab560d0503f68f9d4038fad0cf51a81f08dd4a7313db0",
+      "id": "dreamcast",
+      "name": "Dreamcast",
+      "preferredTitleId": "PPSA99722"
+    },
+    {
+      "badge": "SATURN",
+      "iconBytes": 270389,
+      "iconSha256": "ffc2247ad150f998f0d19efa5bf16b5c98ac1a774575ed532dff6bed3975eef4",
+      "id": "saturn",
+      "name": "Sega Saturn",
+      "preferredTitleId": "PPSA99723"
+    },
+    {
+      "badge": "NAOMI",
+      "iconBytes": 290500,
+      "iconSha256": "7a0850380aefa3dc461f3d49747a14df1ec9fe313ada069681b939634e21fdf9",
+      "id": "naomi",
+      "name": "Sega NAOMI",
+      "preferredTitleId": "PPSA99724"
+    },
+    {
+      "badge": "MEGA DRIVE",
+      "iconBytes": 294966,
+      "iconSha256": "61fd1daf4b091265d9ca59f5d27a57423195e9e7008e8cb06295065ba390cdc5",
+      "id": "genesis",
+      "name": "Mega Drive / Genesis",
+      "preferredTitleId": "PPSA99725"
+    },
+    {
+      "badge": "SEGA CD",
+      "iconBytes": 318021,
+      "iconSha256": "8a42ea65571a4ddfc1df11e3770f829998b422ce59fe4c4e08c4dada972807aa",
+      "id": "segacd",
+      "name": "Sega CD / Mega-CD",
+      "preferredTitleId": "PPSA99726"
+    },
+    {
+      "badge": "32X",
+      "iconBytes": 303892,
+      "iconSha256": "08b3006dd8b68abe34db0214cffd6b27eab3c42c9209fa5ac0c77f9e4686fefd",
+      "id": "sega32x",
+      "name": "Sega 32X",
+      "preferredTitleId": "PPSA99727"
+    },
+    {
+      "badge": "MASTER SYSTEM",
+      "iconBytes": 304594,
+      "iconSha256": "15f7d00b24b2acd3ea1d4027b96575126ec4a77eca4db2d10ba51f3a4291d047",
+      "id": "mastersystem",
+      "name": "Master System",
+      "preferredTitleId": "PPSA99728"
+    },
+    {
+      "badge": "GAME GEAR",
+      "iconBytes": 266289,
+      "iconSha256": "9b56c48750339a5532a3c0883a00cdebbc8426f7bc31002b9ee3984930aae927",
+      "id": "gamegear",
+      "name": "Game Gear",
+      "preferredTitleId": "PPSA99729"
+    },
+    {
+      "badge": "SG-1000",
+      "iconBytes": 275316,
+      "iconSha256": "58818ed7260d7525b493c2de167c9fe1c3c5b78a19410855eb517c2b466e21a7",
+      "id": "sg1000",
+      "name": "SG-1000",
+      "preferredTitleId": "PPSA99730"
+    },
+    {
+      "badge": "ATOMISWAVE",
+      "iconBytes": 320814,
+      "iconSha256": "06e2d476f5c9455e18b3599bc4a0840c9c05625a6b8190c5779bc850d8889e5b",
+      "id": "atomiswave",
+      "name": "Atomiswave",
+      "preferredTitleId": "PPSA99731"
+    },
+    {
+      "badge": "JAGUAR",
+      "iconBytes": 285154,
+      "iconSha256": "f719b3a8ee3ff9a5c5b10b522ef68cd698d79f6fedb19c5e3c9d3bc8c5c6ac2e",
+      "id": "atarijaguar",
+      "name": "Atari Jaguar",
+      "preferredTitleId": "PPSA99732"
+    },
+    {
+      "badge": "LYNX",
+      "iconBytes": 247796,
+      "iconSha256": "95f1ef736df2ddf04d5a2e9ba126798ced5916bbed3de77d62dd081d3c16eb59",
+      "id": "atarilynx",
+      "name": "Atari Lynx",
+      "preferredTitleId": "PPSA99733"
+    },
+    {
+      "badge": "ATARI 7800",
+      "iconBytes": 277239,
+      "iconSha256": "65ef5a0b6339a9051c77415b366270b8d1e120500353499e8cc41cf315fdff7d",
+      "id": "atari7800",
+      "name": "Atari 7800",
+      "preferredTitleId": "PPSA99734"
+    },
+    {
+      "badge": "ATARI 5200",
+      "iconBytes": 292619,
+      "iconSha256": "ffd2586454666a757b142079e759f754aa0adcb7142f87c6b9fd4d3716e9365b",
+      "id": "atari5200",
+      "name": "Atari 5200",
+      "preferredTitleId": "PPSA99735"
+    },
+    {
+      "badge": "ATARI 2600",
+      "iconBytes": 325867,
+      "iconSha256": "e3a1182de67955dd8843432355ba8e7d470451b5e22c37f9ff8574b88972d07b",
+      "id": "atari2600",
+      "name": "Atari 2600",
+      "preferredTitleId": "PPSA99736"
+    },
+    {
+      "badge": "PC ENGINE",
+      "iconBytes": 273870,
+      "iconSha256": "719b894ef5b94abac7e44952c07064e896b1c4261f2794d11556711fa21d9242",
+      "id": "pcengine",
+      "name": "PC Engine / TurboGrafx-16",
+      "preferredTitleId": "PPSA99737"
+    },
+    {
+      "badge": "SUPERGRAFX",
+      "iconBytes": 311301,
+      "iconSha256": "2c5f46c22c78a08f2983add33160a102758f31a40ed9b7193c14653d4d33173d",
+      "id": "supergrafx",
+      "name": "SuperGrafx",
+      "preferredTitleId": "PPSA99738"
+    },
+    {
+      "badge": "PC-FX",
+      "iconBytes": 266944,
+      "iconSha256": "2530df189fc79d3a39121cb9ef9c0339563fd0414adcd5551e56eec5f5b8b1d8",
+      "id": "pcfx",
+      "name": "PC-FX",
+      "preferredTitleId": "PPSA99739"
+    },
+    {
+      "badge": "NEO GEO CD",
+      "iconBytes": 276871,
+      "iconSha256": "6cfa48939d029f00c60a66602f5ce1f89a53cc9bcfec6c543a3e7b98bc3214f9",
+      "id": "neogeocd",
+      "name": "Neo Geo CD",
+      "preferredTitleId": "PPSA99740"
+    },
+    {
+      "badge": "NGPC",
+      "iconBytes": 299199,
+      "iconSha256": "982aaa1739c5524f01765bccdaf0b24445bea7d83536083569c1e6b579510679",
+      "id": "neogeopocketcolor",
+      "name": "Neo Geo Pocket Color",
+      "preferredTitleId": "PPSA99741"
+    },
+    {
+      "badge": "NGP",
+      "iconBytes": 272351,
+      "iconSha256": "f4c7041fdd0fe1ce7054005e9efff66a74f9fd6c89bf1e945e176d401052fa17",
+      "id": "neogeopocket",
+      "name": "Neo Geo Pocket",
+      "preferredTitleId": "PPSA99742"
+    },
+    {
+      "badge": "WONDERSWAN C",
+      "iconBytes": 288854,
+      "iconSha256": "b8fb551218a21a6b96d763c9eb5fbba74dec2ff1e6d275bf9fa11415d9077ebf",
+      "id": "wonderswancolor",
+      "name": "WonderSwan Color",
+      "preferredTitleId": "PPSA99743"
+    },
+    {
+      "badge": "WONDERSWAN",
+      "iconBytes": 280761,
+      "iconSha256": "bd9f328dd30504906643ae5bfa73810ef9d69dae1a31db221994e51990c65a57",
+      "id": "wonderswan",
+      "name": "WonderSwan",
+      "preferredTitleId": "PPSA99744"
+    },
+    {
+      "badge": "3DO",
+      "iconBytes": 280589,
+      "iconSha256": "a5ff02d0bfb0dd80aa74a26ab9051bc0f56446ba7aafc37289e00ce0576746d0",
+      "id": "threedo",
+      "name": "3DO Interactive Multiplayer",
+      "preferredTitleId": "PPSA99745"
+    },
+    {
+      "badge": "FINALBURN NEO",
+      "iconBytes": 269460,
+      "iconSha256": "1aa80a63386e3d2047a8228cff4d75544cda6327b5a840a3a0d367c0c0be6af3",
+      "id": "arcadefbneo",
+      "name": "Arcade · FinalBurn Neo",
+      "preferredTitleId": "PPSA99746"
+    },
+    {
+      "badge": "MAME",
+      "iconBytes": 251896,
+      "iconSha256": "09efc08eb6300fefbe3bccfad0d55f25864854f24e02367e4e69874f15e380fd",
+      "id": "arcademame",
+      "name": "Arcade · MAME",
+      "preferredTitleId": "PPSA99747"
+    },
+    {
+      "badge": "AMIGA",
+      "iconBytes": 280413,
+      "iconSha256": "b2722a5368c189d75951f58c818bcd61a61fb316665b91ffc9f3723f65eb9b31",
+      "id": "amiga",
+      "name": "Amiga",
+      "preferredTitleId": "PPSA99748"
+    },
+    {
+      "badge": "C64",
+      "iconBytes": 297588,
+      "iconSha256": "20f4c471695274b20b4896087e3320c93dc947135fc423b55d8a5a94831a0a10",
+      "id": "c64",
+      "name": "Commodore 64",
+      "preferredTitleId": "PPSA99749"
+    },
+    {
+      "badge": "DOS",
+      "iconBytes": 297505,
+      "iconSha256": "265918f32a06a4de0c7639395b5c89906baeed416b9104f1e4bf17b5df639f41",
+      "id": "dos",
+      "name": "DOS PC games",
+      "preferredTitleId": "PPSA99750"
+    },
+    {
+      "badge": "SCUMMVM",
+      "iconBytes": 314338,
+      "iconSha256": "16a1b91c3b64413c7aaea73c025d5e815ba890621f563205ecf0797215f27067",
+      "id": "scummvm",
+      "name": "ScummVM adventures",
+      "preferredTitleId": "PPSA99751"
+    }
+  ],
+  "target": "PPSA99541",
+  "templateSha256": {
+    "template/eboot.bin": "8e43160e64a4f3fe9f84a2a7cd4b9175772ff9897c3bd8a25870f32b0d936638",
+    "template/param.json": "b70d9efe0c435f2c0e0497e7753de30dff205d7786f9ce47eb7664d3cb0835c3",
+    "template/sce_module/libc.prx": "e6ff45d16adf687855cc3b33b0c8a4132b6504360b221e0a34c7e99fb3ba0036"
+  }
+}

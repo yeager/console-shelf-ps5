@@ -16,6 +16,14 @@ int main(int argc, char** argv) {
                 8);
     if (std::strcmp(mode, "invalid") == 0)
         packet[0] = 0;
+    if (std::strcmp(mode, "probe") == 0) {
+        SDL_atomic_t cancelled{0};
+        const bool sent = shelf::send_probe_elf_once(
+            packet, sizeof(packet), cancelled, static_cast<unsigned short>(std::strtoul(argv[2], nullptr, 10)));
+        std::printf("{\"passed\":%s,\"helperExecuted\":false}\n", sent ? "true" : "false");
+        SDL_Quit();
+        return sent ? 0 : 1;
+    }
     shelf::LaunchRequest request;
     std::strcpy(request.id, "0123456789abcdef0123456789abcdef");
     std::strcpy(request.title, "PPSA99203");
@@ -46,7 +54,10 @@ int main(int argc, char** argv) {
                 break;
             }
             if (!cancelled && state == shelf::LaunchClientState::failed) {
-                result = std::strcmp(mode, "success") == 0 || std::strcmp(mode, "stale") == 0 ? 1 : 0;
+                result = std::strcmp(mode, "success") == 0 || std::strcmp(mode, "stale") == 0 ||
+                                 std::strcmp(mode, "terminal-unconfirmed") == 0
+                             ? 1
+                             : 0;
                 break;
             }
             SDL_Delay(5);

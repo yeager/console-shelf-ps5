@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-only
-"""Prepare public prototype assets after explicit hardware checks. Never publishes or contacts a console."""
+"""Prepare stable public assets after explicit hardware checks. Never publishes or contacts a console."""
 import argparse
 import datetime
 import hashlib
@@ -11,12 +11,33 @@ import uuid
 import zipfile
 
 from ps5_common import CACHE, ROOT, member_path, sha256
+from prepare_store_zip import create_store_zip
 from verify_ps5_build import require, source_fingerprint, verify_recorded_hashes
 
 REQUIRED_CHECKS = ("ui_navigation", "ui_settings", "circle_close", "settings_persist", "restart_reopen",
-                   "psxs5_menu", "ps5sx2_menu", "ps5sx3_menu", "retroarch_n64_game")
-ROUTES = ("PSXS5: emulator shelf", "PS5SX2: emulator shelf", "PS5SX3: emulator shelf",
-          "RetroArch: selected Nintendo 64 game")
+                   "emulator_tile_batch_create", "emulator_tile_update", "emulator_tile_remove_all",
+                   "shadowmount_close_refresh", "psxs5_menu", "ps5sx2_menu", "ps5sx3_menu",
+                   "retroarch_direct_game", "shared_retroarch_tile_selected_library")
+ROUTES = ("PSXS5: standalone emulator library", "PS5SX2: standalone emulator library",
+          "PS5SX3: standalone emulator library", "RetroArch: selected Nintendo 64 game",
+          "Shared RetroArch Home shortcut: matching console library in isShelf")
+
+
+def require_public_build(build):
+    require(build.get("uiTestBridge", False) is False,
+            "Private UI test control builds cannot become public release inputs")
+    require(build.get("ownedTileWrites", False) is True,
+            "Stable release builds must include the exact-owned-source tile manager")
+    contract = build.get("publicImportContract")
+    require(isinstance(contract, dict) and contract.get("uiTestBridge") is False and
+            contract.get("ownedTileWrites") is True and contract.get("baselineImportCount") == 243,
+            "Stable release build lacks the reviewed public import contract")
+
+
+def validate_release_version(version):
+    require(re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+(?:-(?:alpha|beta)\.[0-9]+)?", version) is not None,
+            "Use an explicit semantic release version")
+    return version
 
 
 def cache_path(relative):
@@ -124,7 +145,7 @@ def public_install_notice(guide, version, installed_name):
     legacy = ("Preparation guide for the first prototype. A public binary has not been published yet; see the "
               "[acceptance status](PROTOTYPE-PLAN.md). New builds are named **isShelf (UI test)**; "
               "earlier console-tested builds used **Console Shelf (UI test)**.")
-    published = re.compile(r"^Native PS5 prototype v[0-9]+\.[0-9]+\.[0-9]+-(?:alpha|beta)\.[0-9]+, "
+    published = re.compile(r"^Native PS5 prototype v[0-9]+\.[0-9]+\.[0-9]+(?:-(?:alpha|beta)\.[0-9]+)?, "
                            r"tested on firmware \*\*12\.20\*\*\. The app appears as \*\*[^*\r\n]+\*\*\.$", re.M)
     matches = list(published.finditer(guide))
     require(guide.count(legacy) + len(matches) == 1, "Exactly one install-guide release notice is required")
@@ -175,8 +196,7 @@ def main():
     parser.add_argument("--version", default="v0.1.0-alpha.1")
     args = parser.parse_args()
     require(not (args.verify_inputs_only and args.acceptance), "Input auditing does not consume a hardware acceptance file")
-    require(re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+-(?:alpha|beta)\.[0-9]+", args.version) is not None,
-            "Use an explicit prototype version")
+    validate_release_version(args.version)
     if not args.verify_inputs_only:
         require(args.acceptance is not None, "Reviewed owner hardware-check JSON is required")
         accepted = json.loads(args.acceptance.read_text(encoding="utf-8"))
@@ -191,6 +211,7 @@ def main():
     kit = json.loads((CACHE / "source-kits/latest.json").read_text(encoding="utf-8"))
     require(package["sourceCommit"] == kit["sourceCommit"], "App and complete source kit have different revisions")
     build = verify_recorded_hashes(CACHE / "build")
+    require_public_build(build)
     require(build["self"]["sha256"] == kit["applicationSelf"]["sha256"], "Source kit refers to a different executable")
     if not args.verify_inputs_only:
         require(accepted.get("selfSHA256") == build["self"]["sha256"], "Hardware checks refer to a different executable")
@@ -268,6 +289,8 @@ def main():
     evidence = {"schema": 1, "firmware": "12.20", "selfSHA256": build["self"]["sha256"],
                 "compiledSourceCommit": package["sourceCommit"],
                 "testedManifestSHA256": sha256(source / "manifest.json"),
+                "uiTestBridge": False, "ownedTileWrites": True,
+                "publicImportContract": build["publicImportContract"],
                 "checks": {name: True for name in REQUIRED_CHECKS}, "verifiedRoutes": list(ROUTES),
                 "basis": "Owner console reports; host checks and raw readbacks recorded separately",
                 "limitations": ["Opening can show black before the grid", "Standalone emulators open their shelves",
@@ -309,11 +332,15 @@ def main():
     public_files = [{"path": name, **digest(raw)} for name, raw in sorted(app_data.items())]
     public_manifest = {"schema": 1, "version": args.version, "titleId": "PPSA99541",
                        "compiledSourceCommit": package["sourceCommit"], "launcherRuntime": runtime,
+                       "uiTestBridge": False, "ownedTileWrites": True,
+                       "publicImportContract": build["publicImportContract"],
                        "hardwareChecks": evidence, "sourceKit": source_info, "files": public_files,
                        "sourceAssetComparison": compared, "generatedIconReproduced": True,
                        "publicationToolsCommit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
                        "programComparison": "All hardware-tested files unchanged except START-HERE.md documentation"}
-    app_zip = output / ("isShelf-PS5-" + args.version + ".zip")
+    internal = output / "internal"
+    internal.mkdir()
+    app_zip = internal / ("isShelf-PS5-" + args.version + "-full.zip")
     app_extras = {**guides,
                   "MANIFEST.json": (json.dumps(public_manifest, indent=2) + "\n").encode("utf-8"),
                   "HARDWARE-CHECKS.json": (json.dumps(evidence, indent=2) + "\n").encode("utf-8")}
@@ -331,12 +358,27 @@ def main():
             for name, raw in expected.items():
                 require(completed.read(name) == raw, "Public archive member changed")
     app_info = {"file": app_zip.name, "bytes": app_zip.stat().st_size, "sha256": sha256(app_zip)}
+    store_zip = output / "PPSA99541.zip"
+    store_info = create_store_zip(app_zip, store_zip)
+    standalone = {
+        "MANIFEST.json": app_extras["MANIFEST.json"],
+        "HARDWARE-CHECKS.json": app_extras["HARDWARE-CHECKS.json"],
+        "INSTALL.md": guides["README.md"],
+        "ROOM.md": guides["ROOM.md"],
+    }
+    standalone_info = []
+    for name, raw in standalone.items():
+        path = output / name
+        path.write_bytes(raw)
+        standalone_info.append({"file": name, **digest(raw)})
+    public_assets = [store_info, source_info, *standalone_info]
     sums = output / "SHA256SUMS.txt"
-    sums.write_text("\n".join(info["sha256"] + "  " + info["file"] for info in (app_info, source_info)) + "\n",
+    sums.write_text("\n".join(info["sha256"] + "  " + info["file"] for info in public_assets) + "\n",
                     encoding="ascii")
+    sums_info = {"file": sums.name, **digest(sums.read_bytes())}
     receipt = {"schema": 1, "version": args.version, "directory": str(output.relative_to(ROOT)),
                "compiledSourceCommit": package["sourceCommit"], "applicationSelf": build["self"],
-               "assets": [app_info, source_info, {"file": sums.name, **digest(sums.read_bytes())}],
+               "assets": [*public_assets, sums_info], "internalFullRelease": app_info,
                "sourceKitColdRelink": "pending for the public ZIP; original retained-input baseline passed",
                "consoleDocumentReadback": "pending", "published": False}
     (output / "release-preparation.json").write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")

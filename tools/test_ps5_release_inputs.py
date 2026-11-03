@@ -5,11 +5,54 @@ import json
 import posixpath
 import re
 import unittest
-from prepare_ps5_release import (digest, packaged_icon_source, public_guides, public_install_notice, public_source_documents, verify_asset_sources,
-                                 verify_console_manifest, verify_source_members)
+from pathlib import Path
+from build_ps5 import parse_options
+from prepare_ps5_release import (digest, packaged_icon_source, public_guides, public_install_notice, public_source_documents, require_public_build, validate_release_version,
+                                 verify_asset_sources, verify_console_manifest, verify_source_members)
 
 
 class ReleaseInputTests(unittest.TestCase):
+    def test_normal_build_commands_keep_the_launchable_helper_runtime(self):
+        scripts = json.loads((Path(__file__).parents[1] / "package.json").read_text())["scripts"]
+        self.assertIn("--standard-helper-runtime", scripts["build:ps5"])
+        self.assertIn("--owned-tile-writes", scripts["build:ps5"])
+        self.assertNotIn("--ui-test-bridge", scripts["build:ps5"])
+        self.assertIn("--standard-helper-runtime", scripts["build:ps5-launch-helper"])
+        self.assertIn("--restricted-helper-runtime", scripts["build:ps5-restricted"])
+        self.assertTrue(parse_options([]).standard_helper_runtime)
+        self.assertTrue(parse_options(["--standard-helper-runtime"]).standard_helper_runtime)
+        self.assertFalse(parse_options(["--restricted-helper-runtime"]).standard_helper_runtime)
+        private = parse_options(["--ui-test-bridge", "--owned-tile-writes"])
+        self.assertTrue(private.ui_test_bridge and private.owned_tile_writes)
+
+    def test_private_ui_test_build_cannot_be_released(self):
+        public = {"uiTestBridge": False, "ownedTileWrites": True,
+                  "publicImportContract": {"uiTestBridge": False, "ownedTileWrites": True,
+                                           "baselineImportCount": 243}}
+        require_public_build(public)
+        for value in (True, 1, "false", None):
+            with self.assertRaisesRegex(ValueError, "Private UI test"):
+                require_public_build({**public, "uiTestBridge": value})
+
+    def test_release_requires_owned_tiles_and_reviewed_public_contract(self):
+        for value in (False, 0, "true", None):
+            with self.assertRaisesRegex(ValueError, "tile manager"):
+                require_public_build({"uiTestBridge": False, "ownedTileWrites": value})
+        for contract in (None, {}, {"uiTestBridge": True, "ownedTileWrites": True,
+                                    "baselineImportCount": 243},
+                         {"uiTestBridge": False, "ownedTileWrites": True,
+                          "baselineImportCount": 242}):
+            with self.assertRaisesRegex(ValueError, "public import contract"):
+                require_public_build({"uiTestBridge": False, "ownedTileWrites": True,
+                                      "publicImportContract": contract})
+
+    def test_stable_and_prerelease_versions_are_explicit(self):
+        for version in ("v0.1.0", "v2.4.1-alpha.3", "v2.4.1-beta.9"):
+            self.assertEqual(validate_release_version(version), version)
+        for version in ("0.1.0", "v0.1", "v0.1.0-rc.1", "v0.1.0-beta"):
+            with self.assertRaisesRegex(ValueError, "semantic release version"):
+                validate_release_version(version)
+
     def test_release_notice_updates_a_previous_release_and_preserves_instructions(self):
         old = "Native PS5 prototype v0.1.0-alpha.1, tested on firmware **12.20**. The app appears as **isShelf**."
         instructions = "\n\n## Recovery\nPreserve existing settings and saves.\n"
@@ -17,6 +60,9 @@ class ReleaseInputTests(unittest.TestCase):
         self.assertIn("Native PS5 prototype v0.1.0-beta.1, tested on firmware **12.20**.", result)
         self.assertNotIn("v0.1.0-alpha.1", result)
         self.assertTrue(result.endswith(instructions))
+        stable = public_install_notice(result, "v0.1.0", "isShelf")
+        self.assertIn("Native PS5 prototype v0.1.0, tested on firmware **12.20**.", stable)
+        self.assertNotIn("v0.1.0-beta.1", stable)
 
     def test_release_notice_accepts_preparation_and_rejects_missing_or_ambiguous_notices(self):
         legacy = ("Preparation guide for the first prototype. A public binary has not been published yet; see the "

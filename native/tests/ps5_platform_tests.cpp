@@ -45,6 +45,9 @@ void* registered[2]{};
 std::jmp_buf shell_replaced;
 bool closing_probe = false;
 int close_calls = 0, close_status = 0, close_waits = 0;
+int shell_replace_after = 2, lnc_initialize = 0, lnc_app = 0x2018;
+int lnc_title_status = 0, lnc_kill_status = 0, lnc_kill_calls = 0;
+const char* lnc_title = "PPSA99541";
 int visibility_status = 0;
 unsigned char overlay = 0, background_execution = 0;
 } // namespace
@@ -102,7 +105,7 @@ int sceKernelReleaseDirectMemory(std::int64_t physical, std::size_t size) {
     return -1;
 }
 int sceKernelUsleep(std::uint32_t) {
-    if (closing_probe && ++close_waits == 2)
+    if (closing_probe && ++close_waits == shell_replace_after)
         std::longjmp(shell_replaced, 1);
     return 0;
 }
@@ -117,6 +120,19 @@ int sceSystemServiceGetStatus(void* output) {
     bytes[4] = overlay;
     bytes[5] = background_execution;
     return visibility_status;
+}
+int sceLncUtilInitialize(void) { return lnc_initialize; }
+int sceLncUtilGetAppIdOfRunningBigApp(void) { return lnc_app; }
+int sceLncUtilGetAppTitleId(std::uint32_t app_id, char* output) {
+    assert(app_id == static_cast<std::uint32_t>(lnc_app));
+    if (lnc_title_status == 0 && lnc_title)
+        std::snprintf(output, 16, "%s", lnc_title);
+    return lnc_title_status;
+}
+int sceLncUtilKillApp(std::uint32_t app_id) {
+    assert(app_id == static_cast<std::uint32_t>(lnc_app));
+    ++lnc_kill_calls;
+    return lnc_kill_status;
 }
 int sceSystemServiceHideSplashScreen() {
     assert(flips >= 2); // Never reveal the initial cleared screen or failed startup.
@@ -236,11 +252,24 @@ int main() {
     closing_probe = true;
     if (setjmp(shell_replaced) == 0)
         gs_wait_for_close();
-    assert(close_calls == 1 && close_waits == 2); // An accepted async request must not reach CRT exit.
+    assert(close_calls == 1 && close_waits == 2 && lnc_kill_calls == 0);
+    // A stalled accepted request receives one exact-title self-close after
+    // three seconds, then still waits instead of reaching the CRT exit path.
+    close_waits = 0;
+    shell_replace_after = 31;
+    if (setjmp(shell_replaced) == 0)
+        gs_wait_for_close();
+    assert(close_waits == 31 && lnc_kill_calls == 1);
+    close_waits = 0;
+    lnc_title = "PPSA99203";
+    if (setjmp(shell_replaced) == 0)
+        gs_wait_for_close();
+    assert(close_waits == 31 && lnc_kill_calls == 1); // A different title is never closed.
+    lnc_title = "PPSA99541";
     closing_probe = false;
     close_status = -1;
     assert(gs_request_close() == -1 && close_calls == 2); // No implicit second launch or raw-exit fallback.
     std::puts("PASS: PS5 platform host mocks: allocator overflow/preservation, five display failure paths, first "
               "back-buffer selection, rendered-frame acknowledgement, read-only visibility flags, joined cleanup, "
-              "failed-close memory retention and asynchronous shell exit.");
+              "failed-close memory retention, asynchronous shell exit and exact-title self-close fallback.");
 }

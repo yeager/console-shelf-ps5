@@ -5,8 +5,15 @@ import hashlib
 from bootstrap_ps5_toolchain import environment, host_options, prepare as prepare_compiler
 from fetch_ps5_deps import prepare as prepare_dependencies
 from ps5_common import CACHE, ROOT, run, sha256
-from verify_ps5_build import require, source_fingerprint, verify
+from verify_ps5_build import (PATH_PROBE_ELF_SHA256, PATH_PROBE_SOURCE_SHA256,
+                              PATH_PROBE_V1_ELF_BYTES, PATH_PROBE_V1_ELF_SHA256,
+                              WRITE_PROBE_ELF_SHA256, WRITE_PROBE_SOURCE_SHA256,
+                              WRITE_PROBE_V3_ELF_BYTES, WRITE_PROBE_V3_ELF_SHA256,
+                              embedded_elf_digest_occurrences, require, source_fingerprint, verify)
 from build_launch_helper import main as build_launch_helper
+from console_tile_forwarder_v2.build import main as build_console_tile_forwarder
+from console_badges.build_console_tile_path_probe_v2 import main as build_console_tile_path_probe
+from console_badges.build_console_tile_write_probe_v4 import main as build_console_tile_write_probe
 
 
 def cached_run(args, inputs, output, env):
@@ -21,7 +28,7 @@ def cached_run(args, inputs, output, env):
     stamp.write_text(json.dumps({"key": key, "sha256": sha256(output)}, indent=2) + "\n")
 
 
-def build(standard_runtime=False):
+def build(standard_runtime=True, ui_test_bridge=False, owned_tile_writes=False):
     identity = source_fingerprint()
     video_sources = ROOT / "native/third_party/pl_mpeg"
     for entry in json.loads((video_sources / "SOURCE.json").read_text())["files"]:
@@ -43,6 +50,84 @@ def build(standard_runtime=False):
     (output / "shelf_launch_asset.hpp").write_text(
         "// Generated from the verified owned helper; never read from a console or external request.\n"
         "static const unsigned char shelf_launch_payload[] = {\n" + literal + "\n};\n")
+    probe_record = None
+    probe_payload = None
+    write_probe_record = None
+    write_probe_payload = None
+    if ui_test_bridge:
+        probe_source = ROOT / "tools/console_badges/console_tile_path_probe_v2.cpp"
+        require(sha256(probe_source) == PATH_PROBE_SOURCE_SHA256,
+                "Read-only path probe source differs from the reviewed pin")
+        build_console_tile_path_probe()
+        probe_folder = CACHE / "console-tile-path-probe-v2"
+        probe_elf = probe_folder / "console-tile-path-probe-v2.elf"
+        probe_record = json.loads((probe_folder / "build.json").read_text())
+        probe_identity = probe_record["elf"]
+        require(probe_record["inputs"] == {probe_source.relative_to(ROOT).as_posix(): PATH_PROBE_SOURCE_SHA256} and
+                probe_identity["bytes"] == probe_elf.stat().st_size and
+                probe_identity["sha256"] == sha256(probe_elf) == PATH_PROBE_ELF_SHA256 and
+                sorted(probe_identity["needed"]) == ["libSceLibcInternal.sprx", "libkernel_web.sprx"] and
+                probe_identity["openatPresent"] is False and
+                probe_identity["standardSdkHooksVerified"] is True and
+                probe_identity["mainEntryKlog"] == "ISSHELF_PATH_PROBE_V2_MAIN_ENTERED" and
+                probe_record["request"] == "/data/console-shelf/console-tile-path-request-v2.txt" and
+                probe_record["onConsoleReceipt"] == "/data/console-shelf/console-tile-path-v2-<nonce>.txt" and
+                probe_record["requestMode"] == probe_record["receiptMode"] == "0644" and
+                probe_record["runtimeMode"] == "standard-sdk" and
+                probe_record["permissionChanges"] is True and
+                probe_record["titleRootWriteAttempted"] is False and
+                probe_record["databaseOpenAttempted"] is False and
+                probe_record["networkAttempted"] is False,
+                "Read-only path probe build changed")
+        probe_payload = probe_elf.read_bytes()
+        probe_literal = ",\n".join(",".join(f"0x{byte:02x}" for byte in probe_payload[start:start + 24])
+                                   for start in range(0, len(probe_payload), 24))
+        (output / "console_tile_path_probe_asset.hpp").write_text(
+            "// Private UI test only: exact verified v2 read-only standard-SDK path probe.\n"
+            "#include <cstddef>\n"
+            "static const unsigned char console_tile_path_probe_payload[] = {\n" + probe_literal + "\n};\n"
+            "static constexpr std::size_t console_tile_path_probe_payload_bytes = "
+            "sizeof(console_tile_path_probe_payload);\n")
+        write_source = ROOT / "tools/console_badges/console_tile_write_probe_v4.cpp"
+        require(sha256(write_source) == WRITE_PROBE_SOURCE_SHA256,
+                "Scratch write probe source differs from the reviewed pin")
+        build_console_tile_write_probe()
+        write_folder = CACHE / "console-tile-write-probe-v4"
+        write_elf = write_folder / "console-tile-write-probe-v4.elf"
+        write_probe_record = json.loads((write_folder / "build.json").read_text())
+        write_identity = write_probe_record["elf"]
+        require(write_probe_record["inputs"] == {write_source.relative_to(ROOT).as_posix(): WRITE_PROBE_SOURCE_SHA256} and
+                write_identity["bytes"] == write_elf.stat().st_size and
+                write_identity["sha256"] == sha256(write_elf) == WRITE_PROBE_ELF_SHA256 and
+                sorted(write_identity["needed"]) == ["libSceLibcInternal.sprx", "libkernel_web.sprx"] and
+                write_identity["atSyscalls"] == ["fstatat", "mkdirat", "openat", "renameat", "unlinkat"] and
+                write_identity["atSyscallReturn"] == "freebsd-carry-normalized" and
+                set(write_identity["atAdapterEvidence"]) ==
+                    {"fstatat", "mkdirat", "openat", "renameat", "unlinkat"} and
+                write_probe_record["errnoMacros"] ==
+                    {"ENOENT": 2, "EEXIST": 17, "EIO": 5, "EINVAL": 22} and
+                write_identity["standardSdkHooksVerified"] is True and
+                write_identity["mainEntryKlog"] == "ISSHELF_WRITE_PROBE_V4_MAIN_ENTERED" and
+                write_probe_record["request"] == "/data/console-shelf/console-tile-write-request-v4.txt" and
+                write_probe_record["onConsoleReceipt"] == "/data/console-shelf/console-tile-write-v4-<nonce>.txt" and
+                write_probe_record["scratch"] == "/data/homebrew/.isshelf-write-probe-v4-<nonce>" and
+                write_probe_record["requestMode"] == write_probe_record["receiptMode"] == "0644" and
+                write_probe_record["runtimeMode"] == "standard-sdk" and
+                write_probe_record["permissionChanges"] is True and
+                write_probe_record["validTitleIdWriteAttempted"] is False and
+                write_probe_record["homebrewScratchWritePossible"] is True and
+                write_probe_record["databaseOpenAttempted"] is False and
+                write_probe_record["networkAttempted"] is False,
+                "Scratch write probe build changed")
+        write_probe_payload = write_elf.read_bytes()
+        write_literal = ",\n".join(",".join(f"0x{byte:02x}" for byte in write_probe_payload[start:start + 24])
+                                   for start in range(0, len(write_probe_payload), 24))
+        (output / "console_tile_write_probe_v4_asset.hpp").write_text(
+            "// Private UI test only: exact verified v3 scratch write probe.\n"
+            "#include <cstddef>\n"
+            "static const unsigned char console_tile_write_probe_v4_payload[] = {\n" + write_literal + "\n};\n"
+            "static constexpr std::size_t console_tile_write_probe_v4_payload_bytes = "
+            "sizeof(console_tile_write_probe_v4_payload);\n")
     runtime = ROOT / "native/third_party/ps5-runtime/tooling/native"
     manifest = json.loads((runtime.parent.parent / "SOURCE.json").read_text())
     for entry in manifest["files"]:
@@ -89,8 +174,15 @@ def build(standard_runtime=False):
               "-DSHELF_PS5", "-DGS_NATIVE", "-DNDEBUG", "-D_REENTRANT", "-D_THREAD_SAFE",
               "-I", ROOT / "native/include", "-I", ROOT / "native/ps5", "-I", ROOT / "native/third_party", "-I", output,
               "-I", ports / "include/SDL2", "-I", ports / "include"]
-    sources = [ROOT / "native/src" / (name + ".cpp") for name in ("model", "settings", "ui", "graphics", "codecs", "movie", "library", "filesystem", "metadata", "ftp", "launch_client", "host_main")]
+    if ui_test_bridge:
+        common.append("-DSHELF_UI_TEST_BRIDGE")
+    if owned_tile_writes:
+        common.append("-DSHELF_PS5_OWNED_TILE_WRITES")
+    sources = [ROOT / "native/src" / (name + ".cpp") for name in ("model", "settings", "ui", "graphics", "codecs", "movie", "library", "artwork_sources", "artwork", "filesystem", "metadata", "ftp", "launch_client", "console_tile_manager", "managed_tile_api_v1", "managed_tile_app_client", "host_main")]
     sources += [ROOT / "native/src/json.c"]
+    if ui_test_bridge:
+        sources.append(ROOT / "native/src/ui_test_bridge.cpp")
+        sources.append(ROOT / "native/src/ui_test_video.cpp")
     sources += [ROOT / "native/ps5/platform" / name for name in ("alloc.c", "vout.c", "shims.c", "lifecycle.c")]
     sources += [runtime / "app_crt.cpp", runtime / "app_cpp_runtime.cpp"]
     objects = []
@@ -98,10 +190,14 @@ def build(standard_runtime=False):
         obj = output / (source.stem + ".o")
         language = ["-std=c++17", "-fno-exceptions", "-fno-rtti"] if source.suffix == ".cpp" else ["-std=c11"]
         warnings = ["-Wall", "-Wextra", "-Werror", "-Wno-unused-function"]
+        if source.stem in {"library", "artwork_sources", "artwork", "filesystem", "metadata", "ftp", "ui_test_video", "console_tile_manager"}:
+            # These units run on the bounded library worker stack. Reject a single
+            # oversized frame before a desktop's larger default stack hides it.
+            warnings.append("-Wframe-larger-than=16384")
         if source.stem == "codecs":
             warnings = ["-w"]  # Unmodified third-party implementations; owned units remain strict.
         print("Compile PS5:", source.name, flush=True)
-        run([compiler, *common, *language, *warnings, "-c", source, "-o", obj], env=env)
+        run([compiler, *common, *language, *warnings, "-fstack-usage", "-c", source, "-o", obj], env=env)
         objects.append(obj)
     # Equivalent to SDK v0.42's prospero-lld wrapper, using the pinned linker
     # directly so no global llvm-config symlink or installation is needed.
@@ -118,19 +214,73 @@ def build(standard_runtime=False):
     run([tool, "self", "--sign", "--in", elf, "--out", signed, "--magic", "0x1D3D154F"], env=env)
     run([tool, "self", "--inspect", "--file", signed], env=env)
     report = verify(elf, signed)
+    require(report["uiTestBridge"] == ui_test_bridge, "Private UI test build marker differs from requested options")
+    require(report["ownedTileWrites"] == owned_tile_writes,
+            "Private owned-tile build marker differs from requested options")
     require(elf.read_bytes().count(payload) == 1, "The verified helper is not embedded exactly once")
     report["embeddedLaunchHelper"] = {**helper_record["elf"], "offset": elf.read_bytes().index(payload),
                                      "runtimeMode": helper_record["runtimeMode"],
-                                     "permissionChanges": helper_record["permissionChanges"]}
+                                     "permissionChanges": helper_record["permissionChanges"],
+                                     "exactOriginClose": helper_record["exactOriginClose"]}
+    if ui_test_bridge:
+        raw_elf = elf.read_bytes()
+        require(probe_payload is not None and probe_record is not None and raw_elf.count(probe_payload) == 1,
+                "The verified v2 read-only path probe is not embedded exactly once")
+        require(embedded_elf_digest_occurrences(raw_elf, PATH_PROBE_V1_ELF_BYTES,
+                                                PATH_PROBE_V1_ELF_SHA256) == 0,
+                "Private build still embeds the v1 path probe")
+        report["embeddedConsoleTilePathProbe"] = {
+            **probe_record["elf"], "version": 2, "offset": raw_elf.index(probe_payload),
+            "runtimeMode": probe_record["runtimeMode"],
+            "permissionChanges": probe_record["permissionChanges"],
+            "request": probe_record["request"], "onConsoleReceipt": probe_record["onConsoleReceipt"],
+            "requestMode": probe_record["requestMode"], "receiptMode": probe_record["receiptMode"],
+            "titleRootWriteAttempted": probe_record["titleRootWriteAttempted"],
+            "databaseOpenAttempted": probe_record["databaseOpenAttempted"],
+            "networkAttempted": probe_record["networkAttempted"],
+        }
+        require(write_probe_payload is not None and write_probe_record is not None and
+                raw_elf.count(write_probe_payload) == 1 and
+                embedded_elf_digest_occurrences(raw_elf, WRITE_PROBE_V3_ELF_BYTES,
+                                                WRITE_PROBE_V3_ELF_SHA256) == 0,
+                "The verified v4 scratch write probe is not embedded exactly once")
+        report["embeddedConsoleTileWriteProbe"] = {
+            **write_probe_record["elf"], "version": 4, "offset": raw_elf.index(write_probe_payload),
+            "runtimeMode": write_probe_record["runtimeMode"],
+            "permissionChanges": write_probe_record["permissionChanges"],
+            "request": write_probe_record["request"],
+            "onConsoleReceipt": write_probe_record["onConsoleReceipt"],
+            "scratch": write_probe_record["scratch"],
+            "requestMode": write_probe_record["requestMode"],
+            "receiptMode": write_probe_record["receiptMode"],
+            "validTitleIdWriteAttempted": write_probe_record["validTitleIdWriteAttempted"],
+            "homebrewScratchWritePossible": write_probe_record["homebrewScratchWritePossible"],
+            "databaseOpenAttempted": write_probe_record["databaseOpenAttempted"],
+            "networkAttempted": write_probe_record["networkAttempted"],
+        }
     require(identity == source_fingerprint(), "Build inputs changed during compilation; rebuild before verification")
     (output / "build-source.json").write_text(json.dumps(identity, indent=2) + "\n")
     (output / "structural-check.json").write_text(json.dumps(report, indent=2) + "\n")
+    build_console_tile_forwarder()
     print(f"PS5 executable compiled at {signed}; NOT a validated console package.", flush=True)
 
 
-if __name__ == "__main__":
+def parse_options(arguments=None):
     import argparse
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--standard-helper-runtime", action="store_true",
-                        help="Stage a build with the SDK's permission-changing startup; does not deploy or run it")
-    build(parser.parse_args().standard_helper_runtime)
+    helper_runtime = parser.add_mutually_exclusive_group()
+    helper_runtime.add_argument("--standard-helper-runtime", dest="standard_helper_runtime", action="store_true",
+                                help="Use the accepted SDK helper runtime required for emulator launching (default)")
+    helper_runtime.add_argument("--restricted-helper-runtime", dest="standard_helper_runtime", action="store_false",
+                                help="Build the diagnostic helper that cannot launch on the owner's console")
+    parser.set_defaults(standard_helper_runtime=True)
+    parser.add_argument("--ui-test-bridge", action="store_true",
+                        help="Private only: compile owner-enabled menu control and frame snapshots; blocks public release")
+    parser.add_argument("--owned-tile-writes", action="store_true",
+                        help="Compile the exact-owned-source tile add/edit/remove manager")
+    return parser.parse_args(arguments)
+
+
+if __name__ == "__main__":
+    options = parse_options()
+    build(options.standard_helper_runtime, options.ui_test_bridge, options.owned_tile_writes)

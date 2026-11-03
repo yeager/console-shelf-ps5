@@ -1,10 +1,178 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "shelf/ui.hpp"
+#include "shelf/console_tile_job_routes.hpp"
+#include "shelf/console_tile_startup.hpp"
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
 
 namespace shelf {
+bool begin_console_tile_uninstall_handoff(UiState& state, const char* title_id) {
+    if (!title_id || !std::memchr(title_id, 0, sizeof(state.pending_launch.title)) ||
+        !launch_tile_title_valid(title_id))
+        return false;
+    LaunchRequest request;
+    request.mode = LaunchMode::tile_uninstall;
+    std::snprintf(request.title, sizeof(request.title), "%s", title_id);
+    state.pending_launch = request;
+    state.launch_requested = true;
+    std::snprintf(state.notice, sizeof(state.notice),
+                  "Closing isShelf to finish removing this Home Screen shortcut...");
+    return true;
+}
+bool queue_console_tile_removal(UiState& state, const char* title_id) {
+    if (!title_id || !std::memchr(title_id, 0, sizeof(state.pending_launch.title)) ||
+        !launch_tile_title_valid(title_id))
+        return false;
+    const std::string_view incoming(title_id);
+    std::string_view queued(state.tile_removal_titles);
+    while (!queued.empty()) {
+        const auto comma = queued.find(',');
+        const auto length = comma == queued.npos ? queued.size() : comma;
+        if (queued.substr(0, length) == incoming)
+            return true;
+        if (comma == queued.npos)
+            break;
+        queued.remove_prefix(comma + 1);
+    }
+    if (state.tile_removal_count >= system_count)
+        return false;
+    const auto used = std::strlen(state.tile_removal_titles);
+    const auto separator = used ? 1u : 0u;
+    if (used + separator + incoming.size() >= sizeof(state.tile_removal_titles))
+        return false;
+    if (separator)
+        state.tile_removal_titles[used] = ',';
+    std::memcpy(state.tile_removal_titles + used + separator,
+                incoming.data(), incoming.size() + 1);
+    ++state.tile_removal_count;
+    return true;
+}
+bool queue_console_tile_removals(UiState& state, const char* title_ids,
+                                 std::size_t capacity) {
+    if (!title_ids || !capacity || capacity > sizeof(state.tile_removal_titles))
+        return false;
+    const auto* end = static_cast<const char*>(std::memchr(title_ids, 0, capacity));
+    if (!end)
+        return false;
+    const std::string_view list(title_ids, static_cast<std::size_t>(end - title_ids));
+    const auto comma = list.find(',');
+    const auto first_size = comma == list.npos ? list.size() : comma;
+    const std::string_view first(list.data(), first_size);
+    const std::string_view remaining = comma == list.npos
+        ? std::string_view{}
+        : std::string_view(list.data() + comma + 1, list.size() - comma - 1);
+    if (!launch_tile_refresh_titles_valid(first, remaining))
+        return false;
+    char previous[sizeof(state.tile_removal_titles)];
+    std::memcpy(previous, state.tile_removal_titles, sizeof(previous));
+    const auto previous_count = state.tile_removal_count;
+    std::string_view titles = list;
+    while (!titles.empty()) {
+        const auto next = titles.find(',');
+        const auto length = next == titles.npos ? titles.size() : next;
+        char title[10]{};
+        if (length >= sizeof(title))
+            return false;
+        std::memcpy(title, titles.data(), length);
+        if (!queue_console_tile_removal(state, title)) {
+            state.tile_removal_count = previous_count;
+            std::memcpy(state.tile_removal_titles, previous, sizeof(previous));
+            return false;
+        }
+        if (next == titles.npos)
+            titles = {};
+        else
+            titles.remove_prefix(next + 1);
+    }
+    return true;
+}
+void clear_console_tile_removal_state(UiState& state) {
+    state.tile_installed.fill(false);
+    state.tile_removing.fill(false);
+    state.tile_removal_handoff.fill(false);
+    state.tile_removal_batch_ready = false;
+    state.tile_residual_sweep = false;
+    state.tile_removal_count = 0;
+    std::memset(state.tile_removal_titles, 0,
+                sizeof(state.tile_removal_titles));
+    if (state.page == Page::console_tile)
+        state.tile_focus = 0;
+}
+bool begin_console_tile_removal_handoff(UiState& state) {
+    const std::string_view list(state.tile_removal_titles);
+    const auto comma = list.find(',');
+    const auto first_size = comma == list.npos ? list.size() : comma;
+    const std::string_view first(list.data(), first_size);
+    const std::string_view remaining = comma == list.npos
+        ? std::string_view{}
+        : std::string_view(list.data() + comma + 1, list.size() - comma - 1);
+    std::size_t count = 0;
+    const bool valid_titles = state.tile_residual_sweep
+        ? launch_tile_residual_titles_valid(first, remaining, &count)
+        : launch_tile_refresh_titles_valid(first, remaining, &count);
+    if (!state.tile_removal_count ||
+        !valid_titles ||
+        count != state.tile_removal_count ||
+        first.size() >= sizeof(state.pending_launch.title) ||
+        remaining.size() >= sizeof(state.pending_launch.rom))
+        return false;
+    LaunchRequest request;
+    request.mode = state.tile_residual_sweep
+        ? LaunchMode::tile_residual : LaunchMode::tile_remove;
+    std::memcpy(request.title, first.data(), first.size());
+    request.title[first.size()] = 0;
+    if (!remaining.empty()) {
+        std::memcpy(request.rom, remaining.data(), remaining.size());
+        request.rom[remaining.size()] = 0;
+    }
+    state.pending_launch = request;
+    state.launch_requested = true;
+    if (state.tile_residual_sweep)
+        std::snprintf(state.notice, sizeof(state.notice),
+                      "Closing isShelf so exact residual registrations can be checked and removed...");
+    else if (count == 1)
+        std::snprintf(state.notice, sizeof(state.notice),
+                      "Closing isShelf so ShadowMount can remove this Home Screen tile...");
+    else
+        std::snprintf(state.notice, sizeof(state.notice),
+                      "Closing isShelf so ShadowMount can remove %zu Home Screen tiles...",
+                      count);
+    return true;
+}
+bool begin_console_tile_refresh_handoff(UiState& state, const char* title_ids,
+                                        std::size_t capacity) {
+    if (!title_ids || !capacity || capacity > 521)
+        return false;
+    const auto* end = static_cast<const char*>(std::memchr(title_ids, 0, capacity));
+    if (!end)
+        return false;
+    const std::string_view list(title_ids,
+                                static_cast<std::size_t>(end - title_ids));
+    const auto comma = list.find(',');
+    const auto first_size = comma == list.npos ? list.size() : comma;
+    const std::string_view first(list.data(), first_size);
+    const std::string_view remaining = comma == list.npos
+        ? std::string_view{}
+        : std::string_view(list.data() + comma + 1, list.size() - comma - 1);
+    if (!launch_tile_refresh_titles_valid(first, remaining) ||
+        first.size() >= sizeof(state.pending_launch.title) ||
+        remaining.size() >= sizeof(state.pending_launch.rom))
+        return false;
+    LaunchRequest request;
+    request.mode = LaunchMode::tile_refresh;
+    std::memcpy(request.title, first.data(), first.size());
+    request.title[first.size()] = 0;
+    if (!remaining.empty()) {
+        std::memcpy(request.rom, remaining.data(), remaining.size());
+        request.rom[remaining.size()] = 0;
+    }
+    state.pending_launch = request;
+    state.launch_requested = true;
+    std::snprintf(state.notice, sizeof(state.notice),
+                  "Closing isShelf to refresh the installed Home Screen artwork...");
+    return true;
+}
 namespace {
 int clamp(int value, int maximum) {
     return std::max(0, std::min(value, maximum));
@@ -144,7 +312,16 @@ void erase_query(UiState& state) {
 } // namespace
 
 BrowseResult shown_systems(const UiState& state) {
-    return browse(state.settings.preferences, state.inventory, {state.query, {}});
+    auto shown = browse(state.settings.preferences, state.inventory, {state.query, {}});
+    if (state.tile_home_override < system_count && shown.count < system_count &&
+        std::find(shown.indices.begin(), shown.indices.begin() + shown.count, state.tile_home_override) ==
+            shown.indices.begin() + shown.count) {
+        for (std::size_t i = shown.count; i > 0; --i)
+            shown.indices[i] = shown.indices[i - 1];
+        shown.indices[0] = state.tile_home_override;
+        ++shown.count;
+    }
+    return shown;
 }
 PickerList console_picker(const UiState& state) {
     PickerList list;
@@ -181,6 +358,10 @@ void text_input(UiState& state, const char* utf8) {
 }
 
 void input(UiState& state, Action action) {
+    // Reserved for a future explicit pairing flow. Until it is wired, ordinary
+    // navigation cannot route this sensitive view into Settings or search.
+    if (state.page == Page::pairing_code)
+        return;
     state.notice[0] = 0;
     state.close_hint_requested = false;
     if (state.page == Page::keyboard) {
@@ -217,6 +398,43 @@ void input(UiState& state, Action action) {
                 const char text[] = {key == '_' ? ' ' : key, 0};
                 text_input(state, text);
             }
+        }
+        return;
+    }
+    if (state.page == Page::shortcut_route) {
+        if (state.route_save_busy)
+            return;
+        const bool isshelf_only = console_tile_isshelf_only(state.shortcut_route_system);
+        if (isshelf_only && (action == Action::up || action == Action::left ||
+                             action == Action::down || action == Action::right))
+            state.shortcut_route_focus = 0;
+        else if (action == Action::up || action == Action::left)
+            state.shortcut_route_focus = clamp(state.shortcut_route_focus - 1, 2);
+        else if (action == Action::down || action == Action::right)
+            state.shortcut_route_focus = clamp(state.shortcut_route_focus + 1, 2);
+        else if (action == Action::confirm) {
+            ConsoleTileIntent selected;
+            if (!console_tile_route_choice_intent(state, state.shortcut_route_focus, selected)) {
+                std::snprintf(state.notice, sizeof(state.notice), "%s",
+                              isshelf_only
+                                  ? "PS5 and PS4 shortcuts open in isShelf after the library scan completes."
+                              : !state.shortcut_route_ready && state.shortcut_route_focus != 2
+                                  ? "Library scan incomplete. Choose Home or reopen with ftpsrv running."
+                              : state.shortcut_route_focus == 1 ? "No supported emulator menu is installed for this console."
+                                                                : "That shortcut destination is unavailable.");
+                return;
+            }
+            state.pending_route_save = selected;
+            state.route_save_requested = true;
+            state.route_save_busy = true;
+            state.route_save_apply_after = true;
+            state.route_save_system = selected.system;
+            state.route_save_status = RouteSaveStatus::pending;
+            std::snprintf(state.notice, sizeof(state.notice),
+                          "Saving this console's Home shortcut choice...");
+        } else if (action == Action::back || action == Action::settings) {
+            std::snprintf(state.notice, sizeof(state.notice),
+                          "Choose where to open, or hold Circle to close isShelf.");
         }
         return;
     }
@@ -263,6 +481,204 @@ void input(UiState& state, Action action) {
             cycle(state, action == Action::left ? -1 : 1);
         return;
     }
+    if (state.page == Page::console_tile) {
+        if (action == Action::back) {
+            if (console_tile_writes_enabled)
+                state.tile_create.cancel_selection(state.selected_system);
+            state.page = Page::details;
+            return;
+        }
+        const bool removing = console_tile_writes_enabled &&
+            (state.tile_removing[state.selected_system] || state.tile_removal_batch_ready);
+        const bool removal_handoff = state.tile_removal_batch_ready ||
+                                     state.tile_removal_handoff[state.selected_system];
+        const bool installed = console_tile_writes_enabled && state.tile_installed[state.selected_system];
+        const bool emulator_close = console_tile_writes_enabled &&
+                                    state.tile_emulator_batch_close_ready;
+        const bool isshelf_only_picker = console_tile_isshelf_only(state.selected_system) &&
+                                         !emulator_close && !removing && !removal_handoff;
+        const int last = !console_tile_writes_enabled ? 2
+                         : emulator_close || removal_handoff ? 0
+                         : removing ? 2 : installed ? 6 : 5;
+        if (isshelf_only_picker && (action == Action::up || action == Action::left))
+            state.tile_focus = !console_tile_writes_enabled || state.tile_focus <= 3
+                ? 0 : state.tile_focus - 1;
+        else if (action == Action::up || action == Action::left)
+            state.tile_focus = clamp(state.tile_focus - 1, last);
+        if (isshelf_only_picker && (action == Action::down || action == Action::right))
+            state.tile_focus = !console_tile_writes_enabled
+                ? 0 : state.tile_focus < 3 ? 3 : clamp(state.tile_focus + 1, last);
+        else if (action == Action::down || action == Action::right)
+            state.tile_focus = clamp(state.tile_focus + 1, last);
+        if (action != Action::confirm)
+            return;
+        if (isshelf_only_picker && (state.tile_focus == 1 || state.tile_focus == 2)) {
+            state.tile_focus = 0;
+            std::snprintf(state.notice, sizeof(state.notice),
+                          "PS5 and PS4 shortcuts always open in isShelf.");
+            return;
+        }
+        if (!console_tile_writes_enabled) {
+            if (state.route_save_busy)
+                return;
+            ConsoleTileIntent choice;
+            choice.system = state.selected_system;
+            if (state.tile_focus == 0)
+                choice.destination = ConsoleTileDestination::library;
+            else if (state.tile_focus == 1) {
+                choice.destination = ConsoleTileDestination::emulator;
+                LaunchRequest launch;
+                if (!state.launch_connected || !state.library ||
+                    plan_emulator(*state.library, state.selected_system,
+                                  state.settings.preferred_emulator[state.selected_system].data(), launch) ==
+                        LaunchPlan::unavailable) {
+                    std::snprintf(state.notice, sizeof(state.notice),
+                                  "No supported emulator menu is installed for this console.");
+                    return;
+                }
+                if (!console_tile_emulator_menu_selects_system(launch.title)) {
+                    std::snprintf(state.notice, sizeof(state.notice),
+                                  "RetroArch needs a game to select this console. Choose isShelf game library.");
+                    return;
+                }
+                std::snprintf(choice.emulator_title, sizeof(choice.emulator_title), "%s", launch.title);
+            } else
+                choice.destination = ConsoleTileDestination::home;
+            if (!tile_job::intent_valid(choice, tile_job::installed_emulator_route, state.library)) {
+                std::snprintf(state.notice, sizeof(state.notice),
+                              "The selected shortcut route no longer matches this console.");
+                return;
+            }
+            state.pending_route_save = choice;
+            state.route_save_requested = true;
+            state.route_save_busy = true;
+            state.route_save_apply_after = false;
+            state.route_save_system = state.selected_system;
+            state.route_save_status = RouteSaveStatus::pending;
+            std::snprintf(state.notice, sizeof(state.notice),
+                          "Saving this console's Home shortcut choice...");
+            return;
+        }
+        if (state.tile_busy) {
+            std::snprintf(state.notice, sizeof(state.notice), "%s",
+                          state.tile_batch_busy
+                              ? state.pending_tile.action == ConsoleTileAction::remove_installed
+                                  ? "Queueing all isShelf Home Screen tiles for removal..."
+                              : state.pending_tile.action == ConsoleTileAction::upsert_emulators
+                                  ? "Adding or repairing all supported emulator tiles..."
+                                  : "Updating all installed PS5 Home Screen shortcuts..."
+                              : removing
+                              ? removal_handoff
+                                  ? "Preparing one post-close ShadowMount update..."
+                                  : "Checking PS5 registration before finishing removal..."
+                              : "Checking this PS5 Home Screen shortcut...");
+            return;
+        }
+        if (emulator_close) {
+            state.exit_requested = true;
+            std::snprintf(state.notice, sizeof(state.notice),
+                          "Closing isShelf so ShadowMount can update PS5 Home...");
+            return;
+        }
+        if (!state.tile_connected) {
+            std::snprintf(state.notice, sizeof(state.notice), "PS5 Home Screen shortcut installation is unavailable in this build.");
+            return;
+        }
+        ConsoleTileRequest request;
+        request.intent.system = state.selected_system;
+        if (removing && state.tile_focus == 2) {
+            if (!state.launch_connected || !state.library ||
+                !state.library->scan.complete) {
+                std::snprintf(state.notice, sizeof(state.notice),
+                              "Finish the emulator scan before adding or repairing all emulator tiles.");
+                return;
+            }
+            request.action = ConsoleTileAction::upsert_emulators;
+        } else if (removing && state.tile_focus == 1) {
+            request.action = ConsoleTileAction::remove_installed;
+        } else if (removing) {
+            if (removal_handoff) {
+                if (!begin_console_tile_removal_handoff(state))
+                    std::snprintf(state.notice, sizeof(state.notice),
+                                  "Queued removals could not be prepared. Reopen isShelf and try again.");
+                return;
+            }
+            request.action = ConsoleTileAction::confirm_removed;
+            state.pending_tile = request;
+            state.tile_requested = true;
+            std::snprintf(state.notice, sizeof(state.notice),
+                          "Checking PS5 registration before finishing removal...");
+            return;
+        } else {
+            const int emulator_all_focus = installed ? 4 : 3;
+            const int refresh_focus = installed ? 5 : 4;
+            const int remove_all_focus = installed ? 6 : 5;
+            if (state.tile_focus == remove_all_focus) {
+                request.action = ConsoleTileAction::remove_installed;
+            } else if (state.tile_focus == refresh_focus) {
+                request.action = ConsoleTileAction::refresh_installed;
+            } else if (state.tile_focus == emulator_all_focus) {
+                if (!state.launch_connected || !state.library ||
+                    !state.library->scan.complete) {
+                    std::snprintf(state.notice, sizeof(state.notice),
+                                  "Finish the emulator scan before adding or repairing all emulator tiles.");
+                    return;
+                }
+                request.action = ConsoleTileAction::upsert_emulators;
+            } else if (state.tile_focus == 3) {
+                if (!installed)
+                    return;
+                request.action = ConsoleTileAction::remove;
+            } else if (state.tile_focus == 0) {
+                request.intent.destination = ConsoleTileDestination::library;
+            } else if (state.tile_focus == 1) {
+                request.intent.destination = ConsoleTileDestination::emulator;
+                LaunchRequest launch;
+                if (!state.launch_connected || !state.library ||
+                    plan_emulator(*state.library, state.selected_system,
+                                  state.settings.preferred_emulator[state.selected_system].data(), launch) ==
+                        LaunchPlan::unavailable) {
+                    std::snprintf(state.notice, sizeof(state.notice), "No supported emulator menu is installed for this console.");
+                    return;
+                }
+                if (!console_tile_emulator_menu_selects_system(launch.title)) {
+                    std::snprintf(state.notice, sizeof(state.notice),
+                                  "RetroArch needs a game to select this console. Choose isShelf game library.");
+                    return;
+                }
+                std::snprintf(request.intent.emulator_title, sizeof(request.intent.emulator_title), "%s", launch.title);
+            } else {
+                request.intent.destination = ConsoleTileDestination::home;
+            }
+        }
+        if (request.action != ConsoleTileAction::upsert_emulators &&
+            request.action != ConsoleTileAction::refresh_installed &&
+            request.action != ConsoleTileAction::remove_installed &&
+            !tile_job::intent_valid(request.intent, tile_job::installed_emulator_route,
+                                    state.library)) {
+            std::snprintf(state.notice, sizeof(state.notice),
+                          "The selected shortcut route no longer matches this console.");
+            return;
+        }
+        state.pending_tile = request;
+        state.tile_requested = true;
+        if (request.action == ConsoleTileAction::upsert_emulators) {
+            state.tile_emulator_batch_close_ready = false;
+            state.tile_emulator_batch_created = 0;
+            state.tile_emulator_batch_updated = 0;
+        }
+        std::snprintf(state.notice, sizeof(state.notice), "%s",
+                      request.action == ConsoleTileAction::upsert_emulators
+                          ? "Adding or repairing every supported emulator tile..."
+                      : request.action == ConsoleTileAction::refresh_installed
+                          ? "Updating all installed PS5 Home Screen shortcuts..."
+                      : request.action == ConsoleTileAction::remove_installed
+                          ? "Queueing every isShelf Home Screen tile for removal..."
+                      : request.action == ConsoleTileAction::remove
+                          ? "Queueing this Home Screen tile for removal..."
+                          : "Preparing PS5 Home Screen shortcut...");
+        return;
+    }
     if (state.page == Page::details) {
         if (action == Action::back) {
             state.page = Page::home;
@@ -302,17 +718,35 @@ void input(UiState& state, Action action) {
             }
             return;
         }
-        if (action == Action::up || action == Action::left)
-            state.detail_focus = clamp(state.detail_focus - 1, 2);
-        if (action == Action::down || action == Action::right)
-            state.detail_focus = clamp(state.detail_focus + 1, 2);
+        // The two launch actions share a row. Vertical input follows the
+        // displayed rows; horizontal input moves between those two actions.
+        if (action == Action::up) {
+            if (state.detail_focus == 3) state.detail_focus = 1;
+            else if (state.detail_focus == 1 || state.detail_focus == 2) state.detail_focus = 0;
+        } else if (action == Action::down) {
+            if (state.detail_focus == 0) state.detail_focus = 1;
+            else if (state.detail_focus == 1 || state.detail_focus == 2) state.detail_focus = 3;
+        } else if (action == Action::left && state.detail_focus == 2)
+            state.detail_focus = 1;
+        else if (action == Action::right && state.detail_focus == 1)
+            state.detail_focus = 2;
         if (action == Action::favorite) {
             state.settings.preferences.favorite[state.selected_system] =
                 !state.settings.preferences.favorite[state.selected_system];
             state.changed = true;
         }
         if (action == Action::confirm) {
-            if (state.detail_focus == 2) {
+            if (state.detail_focus == 3) {
+                state.page = Page::console_tile;
+                LaunchRequest emulator;
+                state.tile_focus = !console_tile_isshelf_only(state.selected_system) &&
+                    state.launch_connected && state.library &&
+                    plan_emulator(*state.library, state.selected_system,
+                                  state.settings.preferred_emulator[state.selected_system].data(),
+                                  emulator) != LaunchPlan::unavailable ? 1 : 0;
+                state.route_save_status = RouteSaveStatus::none;
+                state.notice[0] = '\0';
+            } else if (state.detail_focus == 2) {
                 state.page = Page::library;
                 state.game_focus = 0;
             } else if (state.detail_focus == 1 && state.launch_connected && state.library &&

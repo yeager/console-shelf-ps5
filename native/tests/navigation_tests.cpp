@@ -19,15 +19,15 @@ void test_navigation() {
     check(nav.axis(true, 22000, 7, 0, out) && out == Action::right, "stick responds immediately");
     check(!nav.axis(false, 22500, 7, 10, out), "small diagonal wobble does not change direction");
     check(!nav.axis(true, 21000, 7, 20, out), "axis event frequency cannot accelerate navigation");
-    check(nav.tick(280, out) && out == Action::right, "held gesture repeats after its initial pause");
-    check(nav.axis(false, 32000, 7, 300, out) && out == Action::down, "deliberate stronger direction turns");
-    nav.axis(true, 0, 7, 310, out);
-    nav.axis(false, 0, 7, 311, out);
+    check(nav.tick(220, out) && out == Action::right, "held gesture repeats after its short initial pause");
+    check(nav.axis(false, 32000, 7, 240, out) && out == Action::down, "deliberate stronger direction turns");
+    nav.axis(true, 0, 7, 250, out);
+    nav.axis(false, 0, 7, 251, out);
     check(!nav.tick(1000, out), "neutral stops repeat");
     check(nav.button(Action::left, true, 7, 1100, out), "D-pad tap responds immediately");
     nav.button(Action::left, false, 8, 1101, out);
-    check(nav.tick(1380, out) && out == Action::left, "another controller cannot release a held button");
-    check(!nav.axis(true, 32000, 7, 1390, out), "stick does not steal an active D-pad hold");
+    check(nav.tick(1320, out) && out == Action::left, "another controller cannot release a held button");
+    check(!nav.axis(true, 32000, 7, 1330, out), "stick does not steal an active D-pad hold");
     nav.cancel();
     check(!nav.tick(2000, out) && !nav.axis(true, 31000, 7, 2001, out),
           "opening a page cancels repeat and requires the stick to return to neutral");
@@ -35,11 +35,11 @@ void test_navigation() {
     check(nav.axis(true, -24000, 7, 2003, out) && out == Action::left, "a new gesture works after neutral");
     nav.disconnected(7);
     check(!nav.tick(3000, out), "disconnect stops a held gesture");
-    nav.button(Action::down, true, 9, 0xffffff00u, out);
-    check(!nav.tick(0x10u, out) && nav.tick(0x18u, out), "repeat timing handles the clock wrapping");
+    nav.button(Action::down, true, 9, 0xffffff80u, out);
+    check(!nav.tick(0x5bu, out) && nav.tick(0x5cu, out), "repeat timing handles the clock wrapping");
     nav.cancel();
     nav.button(Action::right, true, 9, 5000, out);
-    check(nav.tick(9000, out) && !nav.tick(9000, out) && !nav.tick(9074, out) && nav.tick(9075, out),
+    check(nav.tick(9000, out) && !nav.tick(9000, out) && !nav.tick(9059, out) && nav.tick(9060, out),
           "a delayed frame emits one move and sustained holds accelerate without a backlog");
     std::puts(
         "PASS: physical gesture repeat, diagonal hysteresis, drift, page changes, device ownership and clock wrap.");
@@ -60,10 +60,33 @@ void test_navigation() {
     check(!opening.ready(20000) && !opening.used_fallback(), "known background cancels an earlier fallback");
     opening.sample(20000, 0, 0);
     check(!opening.ready(20119) && opening.ready(20120), "returning to the foreground restarts the stable interval");
+    OpeningGate owner_escape;
+    owner_escape.sample(100, 0, 2);
+    owner_escape.allow_owner_input(500);
+    owner_escape.sample(550, 0, 2);
+    check(owner_escape.used_owner_input() && !owner_escape.ready(619) && owner_escape.ready(620),
+          "physical owner input escapes a stale known-background opening without an immediate action");
     OpeningGate wrapped_opening;
     wrapped_opening.sample(0xffffffc0u, 0, 0);
     check(!wrapped_opening.ready(0x37u) && wrapped_opening.ready(0x38u), "opening gate handles timer wrap");
-    std::puts("PASS: foreground opening gate, overlay pause, unavailable-status fallback and timer wrap.");
+    std::puts("PASS: foreground opening gate, owner escape, overlay pause, unavailable-status fallback and timer wrap.");
+    LaunchVisibilityGate launch_visibility;
+    check(launch_visibility.sample(100, 0, 1) == LaunchVisibilityDecision::wait &&
+              launch_visibility.sample(1000, 0, 0) == LaunchVisibilityDecision::wait &&
+              launch_visibility.sample(1119, 0, 0) == LaunchVisibilityDecision::wait &&
+              launch_visibility.sample(1120, 0, 0) == LaunchVisibilityDecision::commit,
+          "launcher waits for a short stable foreground interval after an overlay");
+    launch_visibility.reset();
+    check(launch_visibility.sample(2000, -1, 0) == LaunchVisibilityDecision::wait &&
+              launch_visibility.sample(6999, 0, 2) == LaunchVisibilityDecision::wait &&
+              launch_visibility.sample(7000, 0, 2) == LaunchVisibilityDecision::cancel,
+          "launcher visibility errors and background state have a bounded cancellation time");
+    launch_visibility.reset();
+    check(launch_visibility.sample(0xffffffc0u, 0, 0) == LaunchVisibilityDecision::wait &&
+              launch_visibility.sample(0x37u, 0, 0) == LaunchVisibilityDecision::wait &&
+              launch_visibility.sample(0x38u, 0, 0) == LaunchVisibilityDecision::commit,
+          "launcher foreground stability handles timer wrap");
+    std::puts("PASS: launch handoff tolerates brief overlays but remains foreground- and timeout-gated.");
     CloseGesture close;
     Presentation view;
     close.press(7, 100);
@@ -80,9 +103,9 @@ void test_navigation() {
     check(!close.closing(), "three-second threshold is not rounded down");
     close.update(10000, view);
     check(close.closing() && !close.finished(10000), "three seconds starts a separate closing animation");
-    close.update(10180, view);
+    close.update(10120, view);
     check(view.close > .49f && view.close < .51f, "close transition has an intermediate frame");
-    check(close.finished(10360), "close waits until the fade completes");
+    check(close.finished(10240), "close waits until the quicker fade completes");
     CloseGesture released_close;
     released_close.press(4, 10);
     check(!released_close.release(4, 3010) && released_close.closing(),
@@ -108,13 +131,13 @@ void test_navigation() {
     pages.select(1, 1080, false);
     check(pages.active && pages.outgoing() && pages.offset() < 0 && pages.opacity() < 1,
           "next page moves the outgoing consoles to the left");
-    pages.select(1, 1240, false);
+    pages.select(1, 1110, false);
     check(!pages.outgoing() && pages.page() == 1 && pages.offset() > 0,
           "incoming consoles arrive from the right in the same shelf positions");
-    pages.select(0, 1250, false);
-    pages.select(0, 1330, false);
+    pages.select(0, 1120, false);
+    pages.select(0, 1200, false);
     check(pages.direction == -1 && pages.offset() > 0, "rapid reverse paging uses the latest requested direction");
-    pages.select(0, 1630, false);
+    pages.select(0, 1380, false);
     check(!pages.active && pages.offset() == 0 && pages.opacity() == 1, "page motion settles with opaque stationary consoles");
     pages.select(2, 1700, true);
     check(!pages.active && pages.page() == 2, "reduced motion changes pages without sliding");

@@ -1,5 +1,9 @@
 # Console icon references and credits
 
+## Support artwork
+
+The [Ko-fi support banner](support/isshelf-support-banner.png) and [coffee/controller decoration](support/isshelf-tip-decoration.png) were created with OpenAI's built-in image generation tool on 3 November 2026 from Iswebro's project direction. They are used only on the repository front page and are not bundled in the PS5 application. The controller is a generic stylized gaming controller, not an official product image or endorsement. The images are offered under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) to the extent rights are held; credit isShelf / Iswebro and note the AI-assisted generation.
+
 isShelf includes 52 newly generated, transparent 3D-style system icons in [`3d-icons/`](3d-icons/). The Switch 2 card and detail view both show the revised generated icon. The icons are stylized illustrations, **not photographs or rotatable 3D models**, and small details may differ from the real hardware. The original Wikimedia Commons photographs are linked below, not bundled in the public repository. Grid view can also show text cards; Swipe and Shelf always use the console illustrations.
 
 ## Room scenery

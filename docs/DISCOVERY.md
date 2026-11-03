@@ -18,9 +18,10 @@ Omit `--scan-only` to browse the resulting inventory in the native PC UI. `--lib
 
 | Source | Discovery rule |
 | --- | --- |
+| Game artwork | Exact serial/filename matches from existing cover folders, RetroArch thumbnails, and registered game icons. Images are cached separately in Shelf's own data folder; optional artwork failures do not hide games. See [game artwork](GAME-ART.md). |
 | Registered emulator apps | Known title identity, public `sce_sys/param.json` and a present program. A source folder alone is insufficient. |
 | RetroArch | Existing `*_libretro.so` files provide core evidence. Per-system folders under the app's `content/` are scanned using explicit folder aliases and format lists. An `.info` file or suggested core name does not count as an installed core. |
-| PSXS5 / SwanStation | Existing `/data/PSXS5/games` and `/data/SwanStationPS5/games`. CUE track references and M3U disc references must resolve within the existing tree. Valid multi-disc manifests suppress their individual discs; BIN tracks are not separate PS1 games. |
+| PSXS5 / SwanStationPS5 / PSSwanStation | Existing `/data/PSXS5/games`, `/data/SwanStationPS5/games`, `/data/homebrew/PPSA99248/games` and `/data/psswanstation/games`. PSSwanStation is detected as title `PPSA99248`; SwanStationPS5 remains a separate choice. CUE track references and M3U disc references must resolve within the existing tree. Valid multi-disc manifests suppress their individual discs; BIN tracks are not separate PS1 games. |
 | PS5SX2 | Existing `/data/PCSX2/games`. ISO candidates must have the ISO9660 descriptor; CHD candidates require their header. |
 | PS5SX3 | Existing `/data/homebrew/PPSA99303/rpcs3/games`. Game folders require `PS3_GAME/PARAM.SFO` and `PS3_GAME/USRDIR/EBOOT.BIN`; title/name come from the bounded SFO parser. Keys are not read. |
 | Native titles | Registered `/user/app` entries with matching public JSON/SFO identity and a program/package/mount marker. Known utility/emulator slots are excluded. A registered tile can still have a broken mount; its presence does not prove playability. |

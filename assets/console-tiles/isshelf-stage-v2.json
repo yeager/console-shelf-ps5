@@ -1,0 +1,9 @@
+{
+  "format": "isshelf-console-tile-stage/2",
+  "asset": "assets/console-tiles/isshelf-stage-v2.png",
+  "sha256": "eb0841fc2bc49ddf269ce9d59caac546f544005f5705696876ad713cfd31a47e",
+  "generator": "OpenAI built-in image generation",
+  "styleReference": "assets/shelf-icon-gaming-v3.png",
+  "purpose": "Reusable text-free premium PS5 Home tile background for all 52 exact console cutouts",
+  "prompt": "Design an elegant obsidian collector shelf for displaying one authentic game console cutout. Use a seamless deep graphite-to-midnight navy wall and floor, one low broad floating obsidian shelf with two subtle offset edge planes that echo the upper and lower strokes of the isShelf S, minimal luxury product-photography rendering, generous central negative space, soft overhead light, restrained cyan and mint edge light, and a small periwinkle accent. Keep the stage completely empty and text-free: no console, controller, people, furniture, literal logo, letters, words, numbers, labels, tags, trademarks, watermark, enclosing neon border, rainbow RGB, hexagons, circuits, fog, particles, or esports clutter."
+}

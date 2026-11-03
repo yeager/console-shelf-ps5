@@ -695,9 +695,12 @@ function openSystem(id) {
   menu.replaceChildren(...selected.emulators.map(emulator => new Option(emulator, emulator)));
   const saved = safeStorage.get('shelf-emulator-' + id);
   if (selected.emulators.includes(saved)) menu.value = saved;
-  $('emulatorLabel').hidden = selected.status === 'reference';
-  $('openEmulator').disabled = selected.status === 'reference';
+  const native = selected.status === 'native';
+  $('emulatorLabel').hidden = selected.status === 'reference' || native;
+  $('openEmulator').hidden = native;
+  $('openEmulator').disabled = selected.status === 'reference' || native;
   $('showLibrary').disabled = selected.status === 'reference';
+  $('showLibrary').textContent = native ? 'Open in isShelf' : 'Show game library';
   $('libraryPanel').hidden = true;
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }

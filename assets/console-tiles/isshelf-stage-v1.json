@@ -1,0 +1,9 @@
+{
+  "format": "isshelf-console-tile-stage/1",
+  "asset": "assets/console-tiles/isshelf-stage-v1.png",
+  "sha256": "1df0881c5cdfbca8899408a96462ad64c93590bb7b9b8221038750a150b8ea45",
+  "generator": "OpenAI built-in image generation",
+  "styleReference": "assets/branding/shelf-gaming-mark.png",
+  "purpose": "Reusable text-free PS5 Home tile background for all 52 console cutouts",
+  "prompt": "Create a sophisticated square PS5 Home tile background plate related to the isShelf visual language: deep midnight navy-to-black studio, restrained shelf-like architectural contours, subtle abstract S-shaped flow, controlled mint-to-cyan rim light, tiny periwinkle accents, satin-black glass and anodized dark metal, and a quiet central product stage. Background only; no console, controller, characters, game art, text, letters, numbers, badges, emblems, literal logo, watermark, busy particles, RGB rainbow, or gaming clichés."
+}

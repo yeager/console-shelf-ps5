@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "shelf/graphics.hpp"
+#include "shelf/console_tile_startup.hpp"
+#include "shelf/artwork.hpp"
+#include "shelf/game_case.hpp"
 #include "shelf/carousel.hpp"
 #include "shelf/scene.generated.hpp"
 #include "shelf/memory.hpp"
@@ -48,6 +51,15 @@ struct Art {
 };
 std::array<Art, 12> art;
 unsigned art_age = 0;
+struct CaseFrame {
+    SDL_Texture* texture = nullptr;
+    std::uint64_t key = 0;
+    int w = 0, h = 0;
+    bool spine = false;
+    unsigned age = 0;
+};
+std::array<CaseFrame, 2> case_frames;
+unsigned case_age = 0;
 OrbitMotion orbit;
 ShelfPageMotion shelf_motion;
 BrowseResult shelf_list{};
@@ -115,11 +127,11 @@ void box(int x, int y, int w, int h, bool selected, SDL_Color fill = panel) {
     rounded(x + edge, y + edge, w - edge * 2, h - edge * 2, 20 - edge, fill);
 }
 void room_wall_panel() {
-    // A quiet smoked-glass backboard on the left wall, clear of both furniture and TV.
-    rounded(56, 105, 1028, 277, 22, {4, 9, 8, 72});
-    rounded(60, 103, 1020, 275, 20, {167, 153, 124, 62});
-    rounded(61, 104, 1018, 273, 19, {13, 23, 21, 239});
-    line(83, 105, 1054, 105, {206, 207, 181, 40});
+    // Match Settings: the backboard fits between the left light and the TV.
+    rounded(160, 105, 1008, 277, 22, {4, 9, 8, 72});
+    rounded(164, 103, 1000, 275, 20, {167, 153, 124, 62});
+    rounded(165, 104, 998, 273, 19, {13, 23, 21, 239});
+    line(188, 105, 1138, 105, {206, 207, 181, 40});
 }
 void room_control(int x, int y, int w, int h, bool selected) {
     rounded(x, y, w, h, 14, selected ? SDL_Color{162, 221, 194, 255} : SDL_Color{83, 100, 89, 255});
@@ -189,7 +201,8 @@ void settings_button(bool selected) {
         }
         SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
     }
-    const SDL_Rect bounds{1783, 24, 64, 64};
+    // Fit between the TV's right bezel and the room's right vertical light.
+    const SDL_Rect bounds{1786, 30, 42, 42};
     SDL_RenderCopy(renderer, texture, nullptr, &bounds);
 }
 Font* font(int size, bool bold) {
@@ -318,14 +331,19 @@ Art* image(std::string_view name, bool monochrome = false) {
     slot->age = art_age;
     slot->monochrome = monochrome;
     char filename[2304];
-    const bool custom = name == "@room" || (name.size() > 7 && std::string_view(name.data(), 7) == "@intro/" &&
+    const bool spine = name.size() == 23 && name.substr(0, 7) == "@spine/";
+    bool cover = name.size() == 23 && (name.substr(0, 7) == "@cover/" || spine);
+    if (cover) for (char c : name.substr(7)) if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'))) cover = false;
+    const bool custom = cover || name == "@room" || (name.size() > 7 && std::string_view(name.data(), 7) == "@intro/" &&
                          find_system(std::string_view(name.data() + 7, name.size() - 7)) < system_count);
     if (name == "@room") std::snprintf(filename, sizeof(filename), "%s/tv-image.png", room_data);
+    else if (cover) std::snprintf(filename, sizeof(filename), "%s/covers/%s%s.png", room_data, slot->name + 7, spine ? ".spine" : "");
     else if (custom) std::snprintf(filename, sizeof(filename), "%s/intros/%s.png", room_data, slot->name + 7);
     else std::snprintf(filename, sizeof(filename), "%s/%s", root, slot->name);
     if (custom) {
         int iw = 0, ih = 0, ic = 0;
-        if (!room_data[0] || !stbi_info(filename, &iw, &ih, &ic) || iw < 1 || ih < 1 || iw > 2048 || ih > 2048)
+        const int limit = cover ? 960 : 2048;
+        if (!room_data[0] || !stbi_info(filename, &iw, &ih, &ic) || iw < 1 || ih < 1 || iw > limit || ih > limit)
             return slot;
     }
     int channels = 0;
@@ -390,6 +408,236 @@ void picture(std::string_view name, int x, int y, int w, int h, Uint8 alpha = 25
     SDL_Rect dest{x + (w - dw) / 2, y + (h - dh) / 2, dw, dh};
     SDL_SetTextureAlphaMod(entry->texture, alpha);
     SDL_RenderCopy(renderer, entry->texture, nullptr, &dest);
+}
+struct CasePoint { float x, y, z; };
+struct CaseView {
+    float yaw, pitch, scale = 1, x = 0, y = 0;
+    SDL_FPoint project(CasePoint p) const {
+        const float rx = p.x * std::cos(yaw) + p.z * std::sin(yaw);
+        const float rz = -p.x * std::sin(yaw) + p.z * std::cos(yaw);
+        const float ry = p.y * std::cos(pitch) - rz * std::sin(pitch);
+        const float depth = p.y * std::sin(pitch) + rz * std::cos(pitch);
+        const float perspective = 4.f / (4.f - depth);
+        return {x + rx * perspective * scale, y - ry * perspective * scale};
+    }
+};
+void case_quad(const CaseView& view, const std::array<CasePoint, 4>& corners, SDL_Color tint,
+               SDL_Texture* texture = nullptr, SDL_FRect uv = {0, 0, 1, 1}, int divisions = 1, int bottom_alpha = -1) {
+    constexpr int maximum = 8;
+    const int n = std::max(1, std::min(maximum, divisions)), stride = n + 1;
+    SDL_Vertex vertices[(maximum + 1) * (maximum + 1)]{};
+    int indices[maximum * maximum * 6];
+    for (int row = 0; row <= n; ++row) for (int column = 0; column <= n; ++column) {
+        const float u = static_cast<float>(column) / n, v = static_cast<float>(row) / n;
+        CasePoint p;
+        p.x = (corners[0].x * (1-u) + corners[1].x * u) * (1-v) + (corners[3].x * (1-u) + corners[2].x * u) * v;
+        p.y = (corners[0].y * (1-u) + corners[1].y * u) * (1-v) + (corners[3].y * (1-u) + corners[2].y * u) * v;
+        p.z = (corners[0].z * (1-u) + corners[1].z * u) * (1-v) + (corners[3].z * (1-u) + corners[2].z * u) * v;
+        auto& vertex = vertices[row * stride + column];
+        vertex.position = view.project(p);
+        vertex.color = tint;
+        if (bottom_alpha >= 0) vertex.color.a = static_cast<Uint8>(tint.a * (1-v) + bottom_alpha * v);
+        vertex.tex_coord = {uv.x + uv.w * u, uv.y + uv.h * v};
+    }
+    int at = 0;
+    for (int row = 0; row < n; ++row) for (int column = 0; column < n; ++column) {
+        const int a = row * stride + column, b = a + 1, c = b + stride, d = a + stride;
+        for (int index : {a,b,c,a,c,d}) indices[at++] = index;
+    }
+    if (texture) { SDL_SetTextureAlphaMod(texture, 255); SDL_SetTextureColorMod(texture, 255, 255, 255); }
+    if (SDL_RenderGeometry(renderer, texture, vertices, stride * stride, indices, at) < 0) ++resource_errors;
+}
+void case_front(const CaseView& view, float left, float top, float right, float bottom, float z, SDL_Color tint,
+                SDL_Texture* texture = nullptr, int divisions = 1) {
+    case_quad(view, {{{left,top,z},{right,top,z},{right,bottom,z},{left,bottom,z}}}, tint, texture, {0,0,1,1}, divisions);
+}
+void plastic_case_shell(const CaseView& view, const CaseProfile& profile, float cw, float depth, Uint8 alpha) {
+    // A rounded solid, with lighting derived from its surface normals. The
+    // narrow curved shoulder catches light; the flat black plastic stays dark.
+    constexpr int samples = 10;
+    constexpr float radius = .007f;
+    const int count = view.scale > 150 ? samples : 4;
+    const float half[3] = {cw / 2, .5f, depth / 2};
+    const auto coordinate = [&](int axis, int index) {
+        const float edge = half[axis] - radius;
+        if (index < count/2) return -edge - radius * std::cos(index * 1.57079633f / (count/2-1));
+        return edge + radius * std::sin((index-count/2) * 1.57079633f / (count/2-1));
+    };
+    const int axes[3][3] = {{0,2,1},{1,0,2},{2,0,1}};
+    const float signs[3] = {-1,1,1};
+    for (int face = 0; face < 3; ++face) {
+        SDL_Vertex vertices[samples*samples]{};
+        int indices[(samples-1)*(samples-1)*6];
+        const int normal_axis = axes[face][0], u_axis = axes[face][1], v_axis = axes[face][2];
+        for (int row = 0; row < count; ++row) for (int column = 0; column < count; ++column) {
+            float p[3]{};
+            p[normal_axis] = half[normal_axis] * signs[face];
+            p[u_axis] = coordinate(u_axis, column); p[v_axis] = coordinate(v_axis, row);
+            float core[3], n[3];
+            for (int a = 0; a < 3; ++a) {
+                core[a] = std::max(-half[a]+radius, std::min(half[a]-radius, p[a]));
+                n[a] = p[a] - core[a];
+            }
+            const float length = std::sqrt(n[0]*n[0]+n[1]*n[1]+n[2]*n[2]);
+            for (int a = 0; a < 3; ++a) { n[a] /= length; p[a] = core[a] + n[a]*radius; }
+            const float nx = n[0]*std::cos(view.yaw)+n[2]*std::sin(view.yaw);
+            const float rz = -n[0]*std::sin(view.yaw)+n[2]*std::cos(view.yaw);
+            const float ny = n[1]*std::cos(view.pitch)-rz*std::sin(view.pitch);
+            const float nz = n[1]*std::sin(view.pitch)+rz*std::cos(view.pitch);
+            const float diffuse = std::max(0.f, -.345f*nx+.603f*ny+.719f*nz);
+            float specular = std::max(0.f, -.176f*nx+.307f*ny+.936f*nz);
+            for (int power = 0; power < 6; ++power) specular *= specular;
+            float strip = std::min(1.f, std::max(0.f, -.2f*nx-.1f*ny+.975f*nz));
+            for (int power = 0; power < 7; ++power) strip *= strip;
+            const float gloss = specular * 120.f + strip * 34.f + std::max(0.f, ny)*2.f;
+            const auto channel = [&](unsigned char base) { return static_cast<Uint8>(std::min(255.f, base*(.45f+.55f*diffuse)+gloss)); };
+            auto& vertex = vertices[row*count+column];
+            vertex.position = view.project({p[0],p[1],p[2]});
+            vertex.color = {channel(profile.red),channel(profile.green),channel(profile.blue),alpha};
+        }
+        int at = 0;
+        for (int row = 0; row < count-1; ++row) for (int column = 0; column < count-1; ++column) {
+            const int a = row*count+column, b = a+1, c = b+count, d = a+count;
+            for (int index : {a,b,c,a,c,d}) indices[at++] = index;
+        }
+        if (SDL_RenderGeometry(renderer,nullptr,vertices,count*count,indices,at) < 0) ++resource_errors;
+    }
+}
+void case_spine_title(const CaseView& view, const LibraryGame& game, float left, float depth, Uint8 alpha) {
+    auto* f = font(20, true);
+    if (!f) return;
+    std::string_view name(game.name);
+    const auto region = name.find(" (");
+    if (region != name.npos) name = std::string_view(name.data(), region);
+    const float scale = std::min(.76f / std::max(1, text_width(name, 20, true)), depth * .68f / 20.f);
+    const float atlas = f->size <= 35 ? 512.f : 1024.f;
+    float cursor = 0;
+    for (std::size_t at = 0; at < name.size();) {
+        unsigned c = codepoint(name, at);
+        if (c < 32 || c > 255) c = '?';
+        const auto& g = f->chars[c - 32];
+        const float y1 = .38f - (cursor + g.xoff) * scale;
+        const float y2 = y1 - (g.x1 - g.x0) * scale;
+        const float z1 = (g.yoff + 7) * scale, z2 = z1 + (g.y1 - g.y0) * scale;
+        case_quad(view, {{{left,y1,z1},{left,y2,z1},{left,y2,z2},{left,y1,z2}}}, {231,232,225,alpha}, f->texture,
+                  {g.x0 / atlas, g.y0 / atlas, (g.x1-g.x0) / atlas, (g.y1-g.y0) / atlas});
+        cursor += g.xadvance;
+    }
+}
+void draw_game_case(const LibraryGame& game, Art* entry, int x, int y, int w, int h, Uint8 alpha) {
+    const auto profile = game_case_profile(game, static_cast<float>(entry->w) / entry->h);
+    const bool large = h > 100, cardboard = profile.material == CaseMaterial::cardboard;
+    const float cw = profile.width / profile.height, depth = profile.depth / profile.height;
+    const float left = -cw / 2, right = cw / 2, front = depth / 2, rear = -front;
+    CaseView view{cardboard ? .4f : .52f, .11f};
+    float minx = 100, maxx = -100, miny = 100, maxy = -100;
+    for (float px : {left, right}) for (float py : {-.5f, .5f}) for (float pz : {rear, front}) {
+        const auto p = view.project({px, py, pz});
+        minx = std::min(minx, p.x); maxx = std::max(maxx, p.x);
+        miny = std::min(miny, p.y); maxy = std::max(maxy, p.y);
+    }
+    view.scale = std::min(w * .91f / (maxx-minx), h * (large ? .86f : .95f) / (maxy-miny));
+    view.x = x + (w - (maxx-minx) * view.scale) / 2 - minx * view.scale;
+    view.y = y + h * (large ? .88f : .98f) - maxy * view.scale;
+    const auto floor = view.project({0,-.5f,0});
+    const int shadow_width = static_cast<int>((maxx-minx) * view.scale * .57f);
+    if (large) {
+        const int radius = std::max(10, h / 36);
+        for (int row = -radius; row <= radius; ++row) {
+            const float fade = 1.f - static_cast<float>(row * row) / ((radius+1) * (radius+1));
+            const int half = static_cast<int>(shadow_width * std::sqrt(std::max(0.f, fade)));
+            line(static_cast<int>(floor.x) - half, static_cast<int>(floor.y) + row + radius / 2,
+                 static_cast<int>(floor.x) + half, static_cast<int>(floor.y) + row + radius / 2,
+                 {0,0,0,static_cast<Uint8>(40 * fade * alpha / 255)});
+        }
+        SDL_Rect clip{x,y,w,h}; SDL_RenderSetClipRect(renderer, &clip);
+        case_quad(view, {{{left,-.51f,front},{right,-.51f,front},{right,-.67f,front},{left,-.67f,front}}},
+                  {158,174,177,static_cast<Uint8>(80u * alpha / 255u)}, entry->texture, {0,1,1,-.16f}, 8, 0);
+        SDL_RenderSetClipRect(renderer, nullptr);
+    }
+    const auto shade = [&](float factor) -> SDL_Color {
+        return {static_cast<Uint8>(std::min(255.f, profile.red * factor)),
+                static_cast<Uint8>(std::min(255.f, profile.green * factor)),
+                static_cast<Uint8>(std::min(255.f, profile.blue * factor)),alpha};
+    };
+    const bool plastic = profile.material == CaseMaterial::plastic;
+    const float shoulder = plastic ? .008f : 0;
+    if (plastic) plastic_case_shell(view, profile, cw, depth, alpha);
+    else {
+        case_quad(view, {{{left,.5f,rear},{left,.5f,front},{left,-.5f,front},{left,-.5f,rear}}}, shade(.55f));
+        case_quad(view, {{{left,.5f,rear},{right,.5f,rear},{right,.5f,front},{left,.5f,front}}}, shade(1.35f));
+        case_front(view, left, .5f, right, -.5f, front, shade(.88f));
+    }
+    const std::array<CasePoint,4> spine{{{left,.5f-shoulder,rear+shoulder},{left,.5f-shoulder,front-shoulder},
+                                       {left,-.5f+shoulder,front-shoulder},{left,-.5f+shoulder,rear+shoulder}}};
+    if (game.artwork_spine_ready) {
+        char spine_key[32]; spine_name(game, spine_key);
+        auto* spine_art = image(spine_key);
+        if (spine_art && spine_art->texture) case_quad(view, spine, {197,203,208,alpha}, spine_art->texture, {0,0,1,1}, large ? 8 : 1);
+    } else if (large) case_spine_title(view, game, left-.0005f, depth, static_cast<Uint8>(190u * alpha / 255u));
+    const float rim = cardboard ? .004f : plastic ? .009f : .014f;
+    const float aspect = static_cast<float>(entry->w) / entry->h;
+    const float art_height = std::min(1 - rim*2, (cw - rim*2) / aspect), art_width = art_height * aspect;
+    case_front(view, -art_width/2, art_height/2, art_width/2, -art_height/2, front+.0005f,
+               {255,255,255,alpha}, entry->texture, large ? 8 : 1);
+    if (!plastic) {
+        const Uint8 edge = static_cast<Uint8>((cardboard ? 43u : 130u) * alpha / 255u);
+        case_front(view, left+.002f, .496f, left+rim*.72f, -.496f, front+.001f, {215,226,235,edge});
+        case_front(view, left+.004f, .499f, right-.004f, .496f, front+.001f, {239,242,240,edge});
+        case_front(view, right-.004f, .496f, right-.001f, -.496f, front+.001f, {16,21,24,alpha});
+    }
+}
+void game_picture(const LibraryGame& game, int x, int y, int w, int h, Uint8 alpha = 255) {
+    const auto fallback = catalog[game.system].image;
+    if (!game.artwork_ready) { picture(fallback, x, y, w, h, alpha); return; }
+    char name[32]; artwork_name(game, name);
+    auto* entry = image(name);
+    if (!entry || !entry->texture) { picture(fallback, x, y, w, h, alpha); return; }
+    const auto profile = game_case_profile(game, static_cast<float>(entry->w) / entry->h);
+    if (game.artwork_kind != ArtworkKind::front || profile.material == CaseMaterial::none) {
+        // A supplied 3D case is complete artwork. Icons and screenshots retain
+        // their original proportions until a real front cover is available.
+        picture(name, x, y, w, h, alpha); return;
+    }
+    if (h > 100 && SDL_RenderTargetSupported(renderer)) {
+        const auto key = game_favorite_key(game);
+        ++case_age;
+        CaseFrame* slot = nullptr;
+        for (auto& frame : case_frames)
+            if (frame.texture && frame.key == key && frame.w == w && frame.h == h && frame.spine == game.artwork_spine_ready)
+                slot = &frame;
+        if (!slot) {
+            slot = &case_frames[0];
+            for (auto& frame : case_frames) if (frame.age < slot->age) slot = &frame;
+            if (slot->texture) SDL_DestroyTexture(slot->texture);
+            slot->texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ABGR8888, SDL_TEXTUREACCESS_TARGET, w*2, h*2);
+            if (slot->texture) {
+                auto* target = SDL_GetRenderTarget(renderer);
+                SDL_Rect viewport, clip;
+                SDL_RenderGetViewport(renderer, &viewport); SDL_RenderGetClipRect(renderer, &clip);
+                const bool clipped = SDL_RenderIsClipEnabled(renderer) == SDL_TRUE;
+                if (SDL_SetRenderTarget(renderer, slot->texture) == 0) {
+                    SDL_RenderSetClipRect(renderer, nullptr);
+                    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0); SDL_RenderClear(renderer);
+                    draw_game_case(game, entry, 0, 0, w*2, h*2, 255);
+                    SDL_SetRenderTarget(renderer, target);
+                    SDL_RenderSetViewport(renderer, &viewport); SDL_RenderSetClipRect(renderer, clipped ? &clip : nullptr);
+                    SDL_SetTextureBlendMode(slot->texture, SDL_BLENDMODE_BLEND);
+                    SDL_SetTextureScaleMode(slot->texture, SDL_ScaleModeLinear);
+                    slot->key = key; slot->w = w; slot->h = h; slot->spine = game.artwork_spine_ready;
+                } else {
+                    SDL_DestroyTexture(slot->texture); slot->texture = nullptr;
+                }
+            }
+        }
+        if (slot->texture) {
+            slot->age = case_age;
+            SDL_SetTextureAlphaMod(slot->texture, alpha);
+            SDL_Rect destination{x,y,w,h}; SDL_RenderCopy(renderer, slot->texture, nullptr, &destination);
+            return;
+        }
+    }
+    draw_game_case(game, entry, x, y, w, h, alpha);
 }
 void shelf_picture(std::string_view name, int cx, int base, int w, int h, bool selected, int floor_top, int floor_end,
                    bool monochrome, Uint8 alpha = 255, float display_scale = 1.f) {
@@ -512,9 +760,9 @@ void label(int x, int y, std::string_view heading, std::string_view value, bool 
     text(value, x + 22, y + 39, 27, white, true, w - 80);
     text("<  >", x + w - 94, y + 29, 24, selected ? purple : muted);
 }
-void footer(std::string_view hint) {
+void footer(std::string_view hint, int text_x = 80) {
     rect(0, 1015, width, 65, {9, 12, 26, 245});
-    text(hint, 80, 1032, 21, muted);
+    text(hint, text_x, 1032, 21, muted);
 }
 void splash(float opacity, unsigned time_ms, bool loading, float appearance = 1, AppIcon icon = AppIcon::vector) {
     const auto alpha = static_cast<Uint8>(std::clamp(opacity, 0.0f, 1.0f) * 255);
@@ -726,7 +974,7 @@ void room_tv(const UiState& state) {
         }
         if (count) {
             const auto& game = state.library->games[games[(render_time / (tv_periods[p.tv_period] * 1000u)) % count]];
-            picture(catalog[game.system].image, x + w / 2 - 115, y + 15, 230, 150, 215);
+            game_picture(game, x + w / 2 - 115, y + 15, 230, 150, 215);
             tv_lines(game.name, x + 35, y + 176, w - 70, 25, {233, 249, 246, 230});
             centered("FROM YOUR FAVOURITES", x + w / 2, y + h - 31, 15, {161, 207, 195, 210}, true);
         } else {
@@ -750,22 +998,23 @@ void home(const UiState& state) {
     const auto shown = shown_systems(state);
     const auto& p = state.settings.preferences;
     const bool room = p.layout == Layout::shelf;
+    const int header_x = room ? 188 : 80;
     if (room) room_wall_panel();
-    text("ONE HOME FOR YOUR SYSTEMS", 80, 119, 19, room ? SDL_Color{176, 215, 190, 255} : purple, true);
+    text("ONE HOME FOR YOUR SYSTEMS", header_x, 119, 19, room ? SDL_Color{176, 215, 190, 255} : purple, true);
     if (room)
-        text("Your console collection", 80, 154, 50, white, true);
+        text("Your console collection", header_x, 154, 50, white, true);
     else {
         text("What do you want", 80, 153, 59, white, true);
         text("to play today?", 80, 218, 59, purple, true);
     }
     const int tool_y = room ? 244 : 314, summary_y = room ? 316 : 391;
-    if (room) room_control(80, tool_y, 780, 66, state.tools && state.tool == 0);
+    if (room) room_control(header_x, tool_y, 760, 66, state.tools && state.tool == 0);
     else box(80, tool_y, 1560, 66, state.tools && state.tool == 0);
-    icon(0, 111, tool_y + 32, room ? SDL_Color{185, 205, 193, 255} : muted);
-    text(state.query[0] ? state.query : "Find a console, brand or core...", 143, tool_y + 16, 24,
-         state.query[0] ? white : room ? SDL_Color{185, 205, 193, 255} : muted, false, room ? 690 : 1420);
-    const int layout_x = room ? 880 : 1664;
-    if (room) room_control(layout_x, tool_y, 180, 66, state.tools && state.tool == 1);
+    icon(0, header_x + 31, tool_y + 32, room ? SDL_Color{185, 205, 193, 255} : muted);
+    text(state.query[0] ? state.query : "Find a console, brand or core...", header_x + 63, tool_y + 16, 24,
+         state.query[0] ? white : room ? SDL_Color{185, 205, 193, 255} : muted, false, room ? 670 : 1420);
+    const int layout_x = room ? 968 : 1664;
+    if (room) room_control(layout_x, tool_y, 170, 66, state.tools && state.tool == 1);
     else box(layout_x, tool_y, 180, 66, state.tools && state.tool == 1);
     icon(p.layout == Layout::grid ? 4 : 2, layout_x + 32, tool_y + 33);
     text(layout_labels[static_cast<std::size_t>(next_layout(p.layout))], layout_x + 58, tool_y + 17, 24, white, true);
@@ -773,7 +1022,7 @@ void home(const UiState& state) {
     std::snprintf(summary, sizeof(summary), "%s  /  %.*s  /  %zu systems", layout_labels[static_cast<std::size_t>(p.layout)].data(),
                   static_cast<int>(sorts[static_cast<std::size_t>(p.sort)].size()),
                   sorts[static_cast<std::size_t>(p.sort)].data(), shown.count);
-    text(summary, 84, summary_y, 20, room ? SDL_Color{190, 205, 196, 255} : muted);
+    text(summary, room ? 192 : 84, summary_y, 20, room ? SDL_Color{190, 205, 196, 255} : muted);
     if (!shown.count) {
         centered("Your shelf is ready for your choices", 960, 620, 42, white, true);
         centered(p.layout == Layout::shelf && p.shelf_single ? "Choose up to 8 consoles in Settings > Consoles." :
@@ -848,8 +1097,8 @@ void home(const UiState& state) {
         char position[64];
         std::snprintf(position, sizeof(position), "%d-%d / %zu", first + 1,
                       std::min(first + 8, static_cast<int>(shown.count)), shown.count);
-        text(availability(state, state.selected_system), 84, summary_y + 29, 19, {190, 205, 196, 255}, false, 500);
-        text(position, 912, summary_y, 19, {190, 205, 196, 255});
+        text(availability(state, state.selected_system), 192, summary_y + 29, 19, {190, 205, 196, 255}, false, 500);
+        text(position, 1008, summary_y, 19, {190, 205, 196, 255});
         char pages[96];
         std::snprintf(pages, sizeof(pages), "%s  %d / %d  %s", state.focus >= 8 ? "L1  <" : "",
                       state.focus / 8 + 1, (static_cast<int>(shown.count) + 7) / 8,
@@ -898,7 +1147,7 @@ void home(const UiState& state) {
         std::snprintf(position, sizeof(position), "%d / %zu", state.focus + 1, shown.count);
         text(position, 1730, 391, 20, muted);
     }
-    footer("D-pad / Stick  Browse    Cross  Open    Triangle  Favourite    Square  Layout    Options  Settings    "
+    footer("D-pad / Stick  Browse    Cross  Open    Triangle  Search    Square  Layout    Options  Settings    "
            "Circle  Back");
 }
 void detail(const UiState& state) {
@@ -907,7 +1156,9 @@ void detail(const UiState& state) {
     text("YOUR SYSTEM COLLECTION", 80, 145, 20, purple, true);
     text(s.name, 80, 194, 58, white, true, 1100);
     text(s.brand, 84, 275, 27, muted);
-    if (state.settings.preferences.layout == Layout::shelf) {
+    if (state.page == Page::library && state.inventory[id].game_count) {
+        // Selected-game artwork occupies this side of the library below.
+    } else if (state.settings.preferences.layout == Layout::shelf) {
         const auto& plane = room_scene::tiers[0];
         const int contact = room_y(static_cast<float>(plane.feet));
         shelf_picture(s.image, room_x(1320), contact, 310, static_cast<int>(plane.art_height * room_scale()), false,
@@ -951,7 +1202,8 @@ void detail(const UiState& state) {
                 const auto& game = state.library->games[games.indices[static_cast<std::size_t>(start + row)]];
                 const int y = 546 + row * 52;
                 box(80, y, 1000, 46, !state.tools && state.game_focus == start + row);
-                text(game.name, 100, y + 7, 23, white, !state.tools && state.game_focus == start + row, 895);
+                game_picture(game, 91, y + 2, 40, 42);
+                text(game.name, 147, y + 7, 23, white, !state.tools && state.game_focus == start + row, 850);
                 const auto key = game_favorite_key(game);
                 if (std::find(state.settings.game_favorites.begin(), state.settings.game_favorites.end(), key) != state.settings.game_favorites.end())
                     text("*", 1026, y + 9, 27, purple, true);
@@ -960,6 +1212,15 @@ void detail(const UiState& state) {
                 char position[80];
                 std::snprintf(position, sizeof(position), "%d / %zu", state.game_focus + 1, games.count);
                 text(position, 84, 973, 19, muted);
+                const auto selected_index = std::min(games.count - 1, static_cast<std::size_t>(std::max(0, state.game_focus)));
+                const auto& selected = state.library->games[games.indices[selected_index]];
+                rounded(1150, 254, 690, 730, 28, {10, 18, 21, 255});
+                text("YOUR GAME COLLECTION", 1190, 281, 18, {170, 199, 190, 255}, true, 600);
+                glow(1220, 390, 540, 450, accent(s), 46);
+                game_picture(selected, 1190, 327, 610, 550);
+                text(selected.name, 1190, 916, 25, white, true, 600);
+                text(selected.artwork_ready ? "From your collection" : "Artwork not available yet",
+                     1190, 953, 18, muted, false, 600);
             }
         }
         char actions[240];
@@ -979,82 +1240,379 @@ void detail(const UiState& state) {
          state.inventory[id].emulator_count ? white : muted, true);
     box(547, 631, 453, 82, !state.tools && state.detail_focus == 2);
     text("Show game library", 575, 652, 29, white, true);
-    text("Choose Show game library to see how each game will open.", 84, 765, 23, muted);
+    box(80, 750, 920, 82, !state.tools && state.detail_focus == 3);
+    const bool tile_status_known = state.tile_observation_system == id;
+    const bool tile_removing = state.tile_removing[id] || state.tile_removal_batch_ready;
+    const bool tile_removal_handoff = state.tile_removal_batch_ready ||
+                                      state.tile_removal_handoff[id];
+    text(!console_tile_writes_enabled ? "Home shortcut opening options"
+         : tile_removing && tile_removal_handoff ? "Apply queued Home Screen removals"
+         : tile_removing ? "Finish PS5 Home Screen removal"
+         : !tile_status_known ? "Manage PS5 Home Screen shortcut"
+         : state.tile_installed[id] ? "Edit PS5 Home Screen shortcut" : "Add to PS5 Home Screen",
+         107, 771, 27, white, true);
+    text(!console_tile_writes_enabled ? "Save where this console's Home tile opens. Tiles are installed separately."
+         : tile_removing && tile_removal_handoff
+             ? "Close isShelf once so ShadowMount can apply every queued removal."
+         : state.tile_removing[id] ? "Open to verify system removal and clean the recovery copy."
+         : !tile_status_known ? "Check, add, update or remove this console's shortcut."
+                                   : "Choose where this console's shortcut opens.",
+         84, 859, 23, muted);
     footer("D-pad  Choose action    Cross  Select    Triangle  Favourite    Circle  Back    Options  Settings");
 }
+void console_tile(const UiState& state) {
+    const auto id = state.selected_system;
+    const auto& system = catalog[id];
+    const bool isshelf_only = console_tile_isshelf_only(id);
+    const bool removing = state.tile_removing[id] || state.tile_removal_batch_ready;
+    const bool removal_handoff = state.tile_removal_batch_ready ||
+                                 state.tile_removal_handoff[id];
+    text("PS5 HOME SCREEN", 80, 145, 20, purple, true);
+    text(system.name, 80, 194, 58, white, true, 1100);
+    text(console_tile_writes_enabled && removing
+             ? removal_handoff
+                 ? "This shortcut is queued for removal."
+                 : "This shortcut is being removed."
+             : isshelf_only ? "This native shortcut always opens in isShelf."
+             : !console_tile_writes_enabled ? "Where should this console shortcut open?"
+                                            : "Where should this console shortcut open?",
+         84, 287, 28, muted);
+    glow(1230, 310, 540, 540, accent(system), 95);
+    picture(system.image, 1200, 310, 600, 600);
+    if (!console_tile_writes_enabled) {
+        LaunchRequest menu_request;
+        const bool emulator_found = state.launch_connected && state.library &&
+                                    plan_emulator(*state.library, id,
+                                                  state.settings.preferred_emulator[id].data(), menu_request) !=
+                                        LaunchPlan::unavailable;
+        const bool shared_retroarch = emulator_found &&
+            !console_tile_emulator_menu_selects_system(menu_request.title);
+        const bool emulator_available = emulator_found && !shared_retroarch;
+        const std::array<const char*, 3> labels = {
+            isshelf_only ? "Open in isShelf" : "isShelf game library", "Direct emulator menu", "isShelf home"};
+        const std::array<const char*, 3> descriptions = {
+            isshelf_only ? "Show this native console's games inside isShelf."
+                         : "Show games from this console inside isShelf.",
+            shared_retroarch ? "RetroArch cannot start with only this console selected; use isShelf library."
+            : emulator_available ? "Open this console's preferred installed emulator."
+                               : "Available when a supported emulator is installed.",
+            "Show isShelf with this console selected."};
+        const int destination_count = isshelf_only ? 1 : 3;
+        for (int choice = 0; choice < destination_count; ++choice) {
+            const int y = 364 + choice * 124;
+            box(80, y, 1000, 104, state.tile_focus == choice);
+            text(labels[static_cast<std::size_t>(choice)], 112, y + 15, 29,
+                 choice == 1 && !emulator_available ? muted : white, true);
+            text(descriptions[static_cast<std::size_t>(choice)], 112, y + 60, 20, muted);
+        }
+        // Keep the observation and explanation on an opaque card. The room
+        // floor begins below this panel; bare text there loses contrast.
+        const int status_y = isshelf_only ? 510 : 742;
+        box(80, status_y, 1000, 189, false);
+        const auto& saved = state.settings.shortcut_routes[id];
+        const char* saved_name = saved.input != tile_route::Input::valid ? "No choice saved yet"
+            : isshelf_only ? "Saved: Open in isShelf"
+            : saved.preference.destination == ConsoleTileDestination::library ? "Saved: isShelf game library"
+            : saved.preference.destination == ConsoleTileDestination::home ? "Saved: isShelf home"
+            : "Saved: direct emulator menu";
+        text(saved_name, 112, status_y + 15, 25, white, true);
+        text("Cross saves a destination. This screen cannot add or remove a Home tile.",
+              112, status_y + 55, 19, muted, false, 940);
+        text("SHADOWMOUNT TITLE STATUS (READ ONLY)", 112, status_y + 87, 18, purple, true);
+        const char* observed = state.tile_busy ? "Checking this title..."
+            : state.tile_observation_system == id && state.tile_observation[0]
+                ? state.tile_observation
+            : state.tile_connected ? "Waiting for this title's status..."
+                                   : "ShadowMount status unavailable.";
+        text(observed, 112, status_y + 116, 19, muted, false, 940);
+        const char* save_line = state.route_save_system == id &&
+                                state.route_save_status == RouteSaveStatus::unavailable
+            ? "Choice could not be confirmed. Reopen isShelf to check."
+            : state.route_save_system == id && state.route_save_status == RouteSaveStatus::saved
+                ? "Choice saved for this console's next Home tile launch."
+            : state.route_save_system == id && state.route_save_status == RouteSaveStatus::pending
+                ? "Saving this choice..."
+                : "A Home tile can be added when shortcut installation is available.";
+        text(save_line, 112, status_y + 147, 18, muted, false, 940);
+        footer(isshelf_only ? "Cross  Open in isShelf    Circle  Back"
+                            : "D-pad  Choose destination    Cross  Save choice    Circle  Back");
+        return;
+    }
+    if (state.tile_emulator_batch_close_ready) {
+        char summary[112];
+        std::snprintf(summary, sizeof(summary),
+                      "Added %zu and updated %zu console tiles.",
+                      state.tile_emulator_batch_created,
+                      state.tile_emulator_batch_updated);
+        text("Standalone emulators open directly; RetroArch systems open their isShelf library.",
+             84, 339, 22, muted, false, 1000);
+        box(80, 427, 1000, 138, state.tile_focus == 0);
+        text("Close isShelf and update PS5 Home", 110, 447, 27, white, true, 940);
+        text(summary, 110, 503, 24, white, true);
+        text("ShadowMount applies newly queued Home Screen tiles after isShelf closes.",
+             84, 610, 21, muted, false, 1000);
+        footer("Cross  Close and apply emulator tiles    Circle  Back");
+        return;
+    }
+    if (removing) {
+        if (removal_handoff) {
+            if (state.tile_residual_sweep) {
+                text("The post-close helper will check all 52 fixed isShelf registration slots.",
+                     84, 339, 22, muted, false, 1000);
+                box(80, 427, 1000, 138, state.tile_focus == 0);
+                text("Close isShelf and clean PS5 Home", 110, 447, 27, white, true, 940);
+                text("Only exact isShelf metadata and artwork matches will be removed.",
+                     110, 503, 21, white, true, 930);
+                text("ShadowMount applies each accepted removal after isShelf closes; absent slots are skipped.",
+                     84, 610, 20, muted, false, 1000);
+                footer("Cross  Close and verify residual tiles    Circle  Back");
+                return;
+            }
+            char queued[96];
+            if (state.tile_removal_count == 1)
+                std::snprintf(queued, sizeof(queued), "1 isShelf tile is queued.");
+            else
+                std::snprintf(queued, sizeof(queued), "%zu isShelf tiles are queued.",
+                              state.tile_removal_count);
+            text("ShadowMount applies Home Screen removals only after isShelf closes.",
+                 84, 339, 22, muted);
+            box(80, 427, 1000, 138, state.tile_focus == 0);
+            text("Close isShelf and update PS5 Home", 110, 447, 27, white, true, 940);
+            text(queued, 110, 503, 24, white, true);
+            text("Go back to queue more tiles, or press Cross once when you are finished.",
+                 84, 610, 21, muted, false, 1000);
+            footer("Cross  Close and apply queued removals    Circle  Back");
+            return;
+        }
+        text("isShelf keeps recovery copies until ShadowMount confirms each tile is gone.",
+             84, 339, 22, muted);
+        box(80, 405, 1000, 90, state.tile_focus == 0);
+        text("Verify this tile's removal", 110, 418, 27, white, true, 940);
+        text("Finish and clean this console's recovery data", 110, 458, 19, white, true);
+        box(80, 510, 1000, 90, state.tile_focus == 1);
+        text("Finish all queued removals", 110, 523, 27, white, true, 940);
+        text("Rebuild one batch, then close isShelf once so ShadowMount can apply it",
+             110, 563, 19, white, true, 930);
+        box(80, 615, 1000, 90, state.tile_focus == 2);
+        text("Add or repair all emulator tiles", 110, 628, 27, white, true, 940);
+        text("Finish confirmed removals, then restore every supported emulator shortcut",
+             110, 668, 19, muted, false, 930);
+        text("If a registration remains, its recovery copy is kept for a later retry.",
+             84, 735, 21, muted, false, 1000);
+        footer("D-pad  Choose action    Cross  Select    Circle  Back");
+        return;
+    }
+    const auto* route = state.library
+                            ? preferred_route(*state.library, id, state.settings.preferred_emulator[id].data())
+                            : nullptr;
+    LaunchRequest menu_request;
+    const bool emulator_found = state.launch_connected && state.library &&
+                                plan_emulator(*state.library, id,
+                                              state.settings.preferred_emulator[id].data(), menu_request) !=
+                                    LaunchPlan::unavailable;
+    const bool shared_retroarch = emulator_found &&
+        !console_tile_emulator_menu_selects_system(menu_request.title);
+    const bool emulator_available = emulator_found && !shared_retroarch;
+    const std::array<const char*, 3> labels = {
+        isshelf_only ? "Open in isShelf" : "isShelf game library", "Direct emulator menu", "isShelf home"};
+    const std::array<const char*, 3> descriptions = {
+        isshelf_only ? "Show this native console's games inside isShelf."
+                     : "Show games from this console inside isShelf.",
+        shared_retroarch ? "RetroArch cannot start with only this console selected; use isShelf library."
+        : emulator_available ? "Open this console's preferred installed emulator."
+                           : "Available when a supported emulator is installed.",
+        "Show isShelf with this console selected."};
+    const int destination_count = isshelf_only ? 1 : 3;
+    for (int choice = 0; choice < destination_count; ++choice) {
+        const int y = 320 + choice * 96;
+        box(80, y, 1000, 80, state.tile_focus == choice);
+        text(labels[static_cast<std::size_t>(choice)], 112, y + 7, 25,
+             state.tile_removing[id] || (choice == 1 && !emulator_available) ? muted : white, true);
+        text(descriptions[static_cast<std::size_t>(choice)], 112, y + 43, 18, muted);
+    }
+    const bool installed = state.tile_installed[id];
+    const int first_action_y = isshelf_only ? 440 : 608;
+    if (installed) {
+        box(80, first_action_y, 1000, 50, state.tile_focus == 3);
+        text("Remove this tile", 112, first_action_y + 9, 23, white, true);
+    }
+    const int emulator_all_focus = installed ? 4 : 3;
+    const int emulator_all_y = isshelf_only
+        ? first_action_y + (installed ? 62 : 0)
+        : installed ? 670 : 608;
+    box(80, emulator_all_y, 1000, 70, state.tile_focus == emulator_all_focus);
+    text(state.tile_batch_busy && state.pending_tile.action == ConsoleTileAction::upsert_emulators
+             ? "Adding or repairing emulator tiles..."
+             : isshelf_only ? "Add or repair all other emulator tiles"
+                            : "Add or repair all emulator tiles",
+         112, emulator_all_y + 7, 24, white, true);
+    text(isshelf_only
+             ? "Keeps this native tile in isShelf while repairing supported emulator shortcuts."
+             : "Standalone emulators open directly; RetroArch systems open the matching isShelf library.",
+         112, emulator_all_y + 39, 17, muted, false, 930);
+    const int refresh_focus = installed ? 5 : 4;
+    const int refresh_y = isshelf_only ? emulator_all_y + 82 : installed ? 752 : 690;
+    box(80, refresh_y, 1000, 70, state.tile_focus == refresh_focus);
+    text(state.tile_batch_busy && state.pending_tile.action == ConsoleTileAction::refresh_installed
+             ? "Updating installed shortcuts..."
+                               : "Update all installed shortcuts",
+         112, refresh_y + 7, 24, white, true);
+    text("Normalizes unsupported routes; re-registers stale artwork and refreshes the runtime.",
+         112, refresh_y + 39, 17, muted, false, 930);
+    const int remove_all_focus = installed ? 6 : 5;
+    const int remove_all_y = isshelf_only ? refresh_y + 82 : installed ? 834 : 772;
+    box(80, remove_all_y, 1000, 82, state.tile_focus == remove_all_focus);
+    text(state.tile_batch_busy && state.pending_tile.action == ConsoleTileAction::remove_installed
+             ? "Queueing all removals..."
+             : "Remove all isShelf tiles",
+         112, remove_all_y + 7, 24, white, true);
+    text("Queues every owned tile, then closes isShelf once so ShadowMount can update Home.",
+         112, remove_all_y + 43, 17, muted, false, 930);
+    if (!isshelf_only && route && !emulator_available)
+        text(shared_retroarch ? "RetroArch has no selected-system menu launch; use isShelf game library."
+                              : "The direct emulator menu is currently unavailable.",
+             84, 928, 17, muted);
+    footer("D-pad  Choose action    Cross  Select    Circle  Back");
+}
+void shortcut_route(const UiState& state) {
+    const auto id = state.shortcut_route_system;
+    if (id >= system_count) {
+        text("SHORTCUT UNAVAILABLE", 164, 145, 20, purple, true);
+        text("Open the main isShelf tile instead.", 164, 194, 40, white, true);
+        footer("Hold Circle  Close isShelf", 164);
+        return;
+    }
+    const auto& system = catalog[id];
+    const bool isshelf_only = console_tile_isshelf_only(id);
+    text("OPEN FROM PS5 HOME", 164, 145, 20, purple, true);
+    text(system.name, 164, 194, 58, white, true, 1000);
+    text(isshelf_only ? "This native console tile opens only in isShelf."
+                      : "Choose where this console's Home tile opens.",
+         168, 287, 28, muted);
+    glow(1230, 310, 540, 540, accent(system), 95);
+    picture(system.image, 1200, 310, 600, 600);
+    ConsoleTileIntent emulator;
+    const bool emulator_available = console_tile_route_choice_intent(state, 1, emulator);
+    LaunchRequest menu_request;
+    const bool emulator_found = state.shortcut_route_ready && state.launch_connected && state.library &&
+                                plan_emulator(*state.library, id,
+                                              state.settings.preferred_emulator[id].data(), menu_request) !=
+                                    LaunchPlan::unavailable;
+    const bool shared_retroarch = emulator_found &&
+        !console_tile_emulator_menu_selects_system(menu_request.title);
+    const std::array<const char*, 3> labels = {
+        isshelf_only ? "Open in isShelf" : "isShelf game library", "Direct emulator menu", "isShelf home"};
+    const std::array<const char*, 3> descriptions = {
+        state.shortcut_route_ready ? isshelf_only
+                                         ? "Show this native console's games inside isShelf."
+                                         : "Show games from this console inside isShelf."
+                                   : "Available when the library scan completes.",
+        shared_retroarch ? "RetroArch cannot start with only this console selected; use isShelf library."
+        : emulator_available ? "Open this console's preferred installed emulator."
+                           : "Available when a supported emulator is installed.",
+        "Show isShelf with this console selected."};
+    const int destination_count = isshelf_only ? 1 : 3;
+    for (int choice = 0; choice < destination_count; ++choice) {
+        const int y = 364 + choice * 124;
+        box(164, y, 1000, 104, state.shortcut_route_focus == choice);
+        const bool enabled = choice == 2 ||
+                             (state.shortcut_route_ready && (choice != 1 || emulator_available));
+        text(labels[static_cast<std::size_t>(choice)], 196, y + 15, 29,
+             enabled ? white : muted, true);
+        text(descriptions[static_cast<std::size_t>(choice)], 196, y + 60, 20, muted);
+    }
+    text(state.shortcut_route_ready ? "This choice is saved, then opens now."
+                                    : isshelf_only
+                                          ? "Library scan incomplete. Reopen with ftpsrv running."
+                                          : "Library scan incomplete. Home can still be saved and opened.",
+         168, isshelf_only ? 535 : 783, 22, muted, false, 996);
+    footer(isshelf_only ? "Cross  Open in isShelf    Hold Circle  Close isShelf"
+                        : "D-pad  Choose destination    Cross  Save and open    Hold Circle  Close isShelf", 164);
+}
 void settings(const UiState& state) {
+    // Keep the room's left light and TV visible around the settings surface.
+    constexpr int panel_x = 164, panel_width = 1000;
+    constexpr int content_x = 206, content_width = 916;
+    const auto setting_label = [&](int y, std::string_view heading, std::string_view value, bool selected) {
+        label(content_x, y, heading, value, selected, content_width);
+    };
     rect(0, 0, width, height, {4, 6, 16, 180});
-    box(350, 76, 1220, 900, false, {20, 23, 41, 255});
-    text("MAKE IT YOURS", 394, 108, 19, purple, true);
-    text("isShelf settings", 394, 139, 43, white, true);
-    text("Changes save automatically", 396, 199, 22, muted);
+    box(panel_x, 76, panel_width, 900, false, {20, 23, 41, 255});
+    picture(icon_files[static_cast<std::size_t>(state.settings.preferences.icon)],
+            panel_x + panel_width - 124, 126, 76, 76);
+    text("MAKE IT YOURS", content_x, 108, 19, purple, true);
+    text("isShelf settings", content_x, 139, 43, white, true);
+    text("Changes save automatically", content_x + 2, 199, 22, muted);
     const std::array<std::string_view, 4> tabs = {"Appearance", "Sort & filter", "Consoles", "Play room"};
     for (int i = 0; i < 4; ++i) {
-        text(tabs[static_cast<std::size_t>(i)], 394 + i * 250, 250, 25,
+        text(tabs[static_cast<std::size_t>(i)], content_x + i * 228, 250, 25,
              static_cast<int>(state.tab) == i ? purple : muted, true);
         if (static_cast<int>(state.tab) == i)
-            rounded(394 + i * 250, 292, 210, 3, 1, purple);
+            rounded(content_x + i * 228, 292, 190, 3, 1, purple);
     }
-    line(350, 304, 1570, 304, {49, 55, 78, 255});
+    line(panel_x, 304, panel_x + panel_width, 304, {49, 55, 78, 255});
     const auto& p = state.settings.preferences;
     if (state.tab == SettingsTab::appearance) {
-        text("Your shelf, your style", 394, 338, 34, white, true);
-        text("Choose Grid, curved Swipe, or a lit display Shelf.", 394, 388, 24, muted);
-        label(394, 429, "Layout", layout_labels[static_cast<std::size_t>(p.layout)], state.settings_focus == 0);
-        label(394, 519, "Grid look", p.layout != Layout::grid ? "Available in Grid layout" :
+        text("Your shelf, your style", content_x, 338, 34, white, true);
+        text("Choose Grid, curved Swipe, or a lit display Shelf.", content_x, 388, 24, muted);
+        setting_label(429, "Layout", layout_labels[static_cast<std::size_t>(p.layout)], state.settings_focus == 0);
+        setting_label(519, "Grid look", p.layout != Layout::grid ? "Available in Grid layout" :
               p.grid_look == GridLook::icons ? "3D console icons" : "Classic cards",
               state.settings_focus == 1);
-        label(394, 609, "isShelf logo", icon_names[static_cast<std::size_t>(p.icon)], state.settings_focus == 2);
-        label(394, 699, "Missing emulator artwork", p.monochrome_missing ? "Black & white" : "Full colour",
+        setting_label(609, "isShelf logo", icon_names[static_cast<std::size_t>(p.icon)], state.settings_focus == 2);
+        setting_label(699, "Missing emulator artwork", p.monochrome_missing ? "Black & white" : "Full colour",
               state.settings_focus == 3);
-        label(394, 789, "Motion", p.reduced_motion ? "Reduced: instant page changes" : "Smooth console transitions",
+        setting_label(789, "Motion", p.reduced_motion ? "Reduced: instant page changes" : "Smooth console transitions",
               state.settings_focus == 4);
     } else if (state.tab == SettingsTab::browse) {
-        text("Find your next favourite", 394, 338, 34, white, true);
-        text("Choose an order and narrow down your collection.", 394, 388, 24, muted);
-        label(394, 435, "Sort by", sorts[static_cast<std::size_t>(p.sort)], state.settings_focus == 0);
-        label(394, 539, "Brand", p.brand ? brands[p.brand] : "All brands", state.settings_focus == 1);
-        label(394, 643, "Availability", filters[static_cast<std::size_t>(p.filter)], state.settings_focus == 2);
-        label(394, 747, "Shelf pages", p.shelf_single ? "One curated shelf: choose up to 8 consoles" :
+        text("Find your next favourite", content_x, 338, 34, white, true);
+        text("Choose an order and narrow down your collection.", content_x, 388, 24, muted);
+        setting_label(435, "Sort by", sorts[static_cast<std::size_t>(p.sort)], state.settings_focus == 0);
+        setting_label(539, "Brand", p.brand ? brands[p.brand] : "All brands", state.settings_focus == 1);
+        setting_label(643, "Availability", filters[static_cast<std::size_t>(p.filter)], state.settings_focus == 2);
+        setting_label(747, "Shelf pages", p.shelf_single ? "One curated shelf: choose up to 8 consoles" :
               "Browse collection: 8 consoles per page", state.settings_focus == 3);
         text(p.shelf_single ? "Choose your 8 in Consoles. Grid and Swipe keep your full collection." :
-              "L1 / R1 changes pages in Shelf. Your filters apply to every page.", 400, 855, 21, muted);
+              "L1 / R1 changes pages in Shelf. Your filters apply to every page.", content_x + 6, 855, 21, muted,
+             false, content_width - 12);
     } else if (state.tab == SettingsTab::room) {
-        text("Your room, your screen", 394, 338, 34, white, true);
-        text("TV content sits behind the glass. Shelf layout only.", 394, 388, 24, muted);
-        label(394, 421, "TV display", tv_labels[static_cast<std::size_t>(p.tv_mode)], state.settings_focus == 0);
-        label(394, 505, "Personal message - Cross to edit", state.settings.tv_text, state.settings_focus == 1);
+        text("Your room, your screen", content_x, 338, 34, white, true);
+        text("TV content sits behind the glass. Shelf layout only.", content_x, 388, 24, muted);
+        setting_label(421, "TV display", tv_labels[static_cast<std::size_t>(p.tv_mode)], state.settings_focus == 0);
+        setting_label(505, "Personal message - Cross to edit", state.settings.tv_text, state.settings_focus == 1);
         char interval[64]; std::snprintf(interval, sizeof(interval), "Every %u seconds", tv_periods[p.tv_period]);
-        label(394, 589, "Favourite game rotation", interval, state.settings_focus == 2);
-        label(394, 673, "Console intros", p.intro_all ? "All consoles" : "Installed emulators and built-in systems", state.settings_focus == 3);
-        label(394, 757, "TV static for missing content", noise_labels[static_cast<std::size_t>(p.tv_noise)], state.settings_focus == 4);
-        text("Own intros: /data/console-shelf/intros/<console-id>.png or .mpg", 400, 854, 20, muted);
-        text("isShelf originals included. Your personal PNG or MPEG-1 clip takes priority.", 400, 882, 19, muted);
+        setting_label(589, "Favourite game rotation", interval, state.settings_focus == 2);
+        setting_label(673, "Console intros", p.intro_all ? "All consoles" : "Installed emulators and built-in systems", state.settings_focus == 3);
+        setting_label(757, "TV static for missing content", noise_labels[static_cast<std::size_t>(p.tv_noise)], state.settings_focus == 4);
+        text("Own intros: /data/console-shelf/intros/<console-id>.png or .mpg", content_x + 6, 854, 20, muted,
+             false, content_width - 12);
+        text("isShelf originals included. Your personal PNG or MPEG-1 clip takes priority.", content_x + 6, 882,
+             19, muted, false, content_width - 12);
     } else {
-        label(394, 330, "Show on my shelf", p.scope == Scope::all ? "All consoles" :
+        setting_label(330, "Show on my shelf", p.scope == Scope::all ? "All consoles" :
               p.scope == Scope::available ? "Emulator or games" : "Favourites only",
               state.settings_focus == 0);
-        box(394, 432, 1032, 58, state.settings_focus == 1);
-        icon(0, 424, 460, muted);
-        text(state.console_query[0] ? state.console_query : "Find a console or brand...", 454, 446, 22,
-             state.console_query[0] ? white : muted);
+        box(content_x, 432, content_width, 58, state.settings_focus == 1);
+        icon(0, content_x + 30, 460, muted);
+        text(state.console_query[0] ? state.console_query : "Find a console or brand...", content_x + 60, 446, 22,
+             state.console_query[0] ? white : muted, false, content_width - 80);
         std::size_t enabled = 0;
         for (std::size_t i = 0; i < system_count; ++i)
             if (p.shelf_single ? p.shelf_selected[i] : !p.hidden[i]) ++enabled;
         char tally[80];
         std::snprintf(tally, sizeof(tally), "%zu of %zu %s", enabled, p.shelf_single ? shelf_capacity : system_count,
                       p.shelf_single ? "display spaces filled" : "enabled");
-        text(tally, 398, 509, 20, muted);
-        rounded(981, 500, 207, 42, 10, state.settings_focus == 2 ? purple : SDL_Color{29, 34, 57, 255});
-        centered(p.shelf_single ? "Fill spaces" : state.console_query[0] ? "Show results" : "Show all", 1084, 507, 20,
+        text(tally, content_x + 4, 509, 20, muted);
+        rounded(697, 500, 194, 42, 10, state.settings_focus == 2 ? purple : SDL_Color{29, 34, 57, 255});
+        centered(p.shelf_single ? "Fill spaces" : state.console_query[0] ? "Show results" : "Show all", 794, 507, 20,
                  state.settings_focus == 2 ? panel : muted, true);
-        rounded(1200, 500, 227, 42, 10, state.settings_focus == 3 ? purple : SDL_Color{29, 34, 57, 255});
-        centered(p.shelf_single ? "Clear selection" : state.console_query[0] ? "Hide results" : "Hide all", 1313, 507, 20,
+        rounded(906, 500, 216, 42, 10, state.settings_focus == 3 ? purple : SDL_Color{29, 34, 57, 255});
+        centered(p.shelf_single ? "Clear selection" : state.console_query[0] ? "Hide results" : "Hide all", 1014, 507, 20,
                  state.settings_focus == 3 ? panel : muted, true);
         const auto picker = console_picker(state);
         const int selected = state.settings_focus - 4;
         const int start = std::max(0, selected - 3);
-        SDL_Rect clip{390, 555, 1050, 321};
+        SDL_Rect clip{content_x - 4, 555, content_width + 8, 321};
         SDL_RenderSetClipRect(renderer, &clip);
         for (int row = 0; row < 5; ++row) {
             const int at = start + row;
@@ -1064,25 +1622,26 @@ void settings(const UiState& state) {
             const int y = 555 + row * 66;
             const bool active = at == selected;
             if (active)
-                rounded(394, y, 1032, 62, 12, {58, 48, 88, 255});
+                rounded(content_x, y, content_width, 62, 12, {58, 48, 88, 255});
             if (e.group) {
-                text(brands[e.index], 414, y + 17, 23, purple, true);
-                text("Cross: toggle brand", 1170, y + 20, 18, muted);
+                text(brands[e.index], content_x + 20, y + 17, 23, purple, true);
+                text("Cross: toggle brand", 907, y + 20, 18, muted);
             } else {
                 const auto& s = catalog[e.index];
                 const bool enabled_item = p.shelf_single ? p.shelf_selected[e.index] : !p.hidden[e.index];
-                picture(s.image, 408, y + 3, 61, 55, enabled_item ? 255 : 100,
+                picture(s.image, content_x + 14, y + 3, 61, 55, enabled_item ? 255 : 100,
                         use_monochrome(p, state.inventory[e.index], s.id));
-                text(s.name, 489, y + 17, 25, enabled_item ? white : muted, true, 785);
-                switch_control(1334, y + 17, enabled_item);
+                text(s.name, content_x + 95, y + 17, 25, enabled_item ? white : muted, true, 730);
+                switch_control(1050, y + 17, enabled_item);
             }
         }
         SDL_RenderSetClipRect(renderer, nullptr);
         if (!picker.count)
-            centered("No consoles match this search", 910, 647, 27, muted);
+            centered("No consoles match this search", panel_x + panel_width / 2, 647, 27, muted);
     }
-    rect(351, 892, 1218, 83, {15, 19, 35, 255});
-    text("L1 / R1  Sections     D-pad  Choose     Cross / Left / Right  Change     Circle  Done", 394, 919, 20, muted);
+    rect(panel_x + 1, 913, panel_width - 2, 62, {15, 19, 35, 255});
+    text("L1 / R1  Sections     D-pad  Choose     Cross / Left / Right  Change     Circle  Done",
+         content_x, 929, 20, muted, false, content_width);
 }
 void keyboard(const UiState& state) {
     rect(0, 0, width, height, {4, 6, 16, 210});
@@ -1223,19 +1782,34 @@ void graphics_render(const UiState& state, unsigned time_ms, bool animate) {
     SDL_RenderCopy(renderer, room_visible ? shelf_background : background, nullptr, nullptr);
     if (!state.presentation.loading || state.presentation.preparing) {
         if (room_visible) room_tv(state);
-        picture(icon_files[static_cast<std::size_t>(state.settings.preferences.icon)], 80, 30, 50, 50);
-        text("isShelf", 147, 36, 29, white, true);
+        const bool settings_surface = state.page == Page::settings ||
+                                      (state.page == Page::keyboard && state.keyboard_for_consoles);
+        if (!settings_surface) {
+            const bool constrained_header = room_visible || state.page == Page::shortcut_route;
+            const int brand_x = constrained_header ? 164 : 80;
+            picture(icon_files[static_cast<std::size_t>(state.settings.preferences.icon)], brand_x, 30, 50, 50);
+            text("isShelf", brand_x + 67, 36, 29, white, true);
+            if (state.ui_test_active)
+                text("UI TEST CONTROL / L3 + R3 TO STOP", 1260, 42, 18, purple, true);
+            else {
 #ifdef SHELF_PS5
-        text("PS5 / DEVELOPMENT BUILD", 1388, 42, 18, muted, true);
+                text("PS5 / DEVELOPMENT BUILD", 1388, 42, 18, muted, true);
 #else
-        text("NATIVE DEVELOPMENT BUILD / PC", 1388, 42, 18, muted, true);
+                text("NATIVE DEVELOPMENT BUILD / PC", 1388, 42, 18, muted, true);
 #endif
-        settings_button(state.tools && state.tool == 2);
-        line(80, 99, room_visible ? 1100 : 1840, 99, {43, 48, 69, 255});
+            }
+            if (state.page != Page::shortcut_route)
+                settings_button(state.tools && state.tool == 2);
+            line(brand_x, 99, constrained_header ? 1164 : 1840, 99, {43, 48, 69, 255});
+        }
         if (state.page == Page::home)
             home(state);
         else if (state.page == Page::details || state.page == Page::library)
             detail(state);
+        else if (state.page == Page::console_tile)
+            console_tile(state);
+        else if (state.page == Page::shortcut_route)
+            shortcut_route(state);
         else if (state.page == Page::settings)
             settings(state);
         else if (state.page == Page::keyboard) {
@@ -1290,6 +1864,10 @@ unsigned graphics_errors() {
 }
 void graphics_shutdown() {
     stop_movie();
+    for (auto& frame : case_frames) {
+        if (frame.texture) SDL_DestroyTexture(frame.texture);
+        frame = CaseFrame{};
+    }
     if (noise_texture) SDL_DestroyTexture(noise_texture);
     noise_texture = nullptr;
     release(noise_pixels); noise_pixels = nullptr; noise_width = noise_height = 0;

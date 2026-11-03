@@ -15,12 +15,16 @@ class NavigationInput {
     bool stick_blocked = false;
     std::uint32_t began = 0, next = 0;
     static constexpr int engage = 15000, release = 9000;
+    static constexpr std::uint32_t initial_repeat_ms = 220;
+    static constexpr std::uint32_t accelerated_after_ms = 700;
+    static constexpr std::uint32_t repeat_ms = 85;
+    static constexpr std::uint32_t accelerated_repeat_ms = 60;
     bool start(Action direction, Source kind, std::int32_t device, std::uint32_t now, Action& output) {
         source = kind;
         held = output = direction;
         owner = device;
         began = now;
-        next = now + 280;
+        next = now + initial_repeat_ms;
         return true;
     }
 
@@ -75,7 +79,8 @@ class NavigationInput {
             return false;
         output = held;
         // Accelerate a sustained hold, without queuing a burst after a slow frame.
-        next = now + (static_cast<std::uint32_t>(now - began) >= 1100 ? 75 : 110);
+        next = now + (static_cast<std::uint32_t>(now - began) >= accelerated_after_ms
+                          ? accelerated_repeat_ms : repeat_ms);
         return true;
     }
     void cancel() {

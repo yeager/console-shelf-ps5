@@ -72,8 +72,8 @@ def main():
                       "This kit retains the restricted launcher CRT. SDK patch.c and the custom\n"
                       "shared-object loader are excluded; Shelf's runtime_limits.c supplies\n"
                       "no-op/refusal hooks and keeps the existing loader's permissions.")
-    build_command = ("node tools/build-ps5.js build_ps5.py --standard-helper-runtime"
-                     if standard else "npm run build:ps5")
+    build_command = ("node tools/build-ps5.js build_ps5.py --standard-helper-runtime --owned-tile-writes"
+                     if standard else "node tools/build-ps5.js build_ps5.py --restricted-helper-runtime")
     checked(inputs / "build-source.json", record["sourceFingerprint"])
     fingerprint = json.loads((inputs / "build-source.json").read_text())
     require(source_fingerprint() == fingerprint, "Source kit does not match the compiled application inputs")

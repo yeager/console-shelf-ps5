@@ -2,8 +2,21 @@
 native-estante/
 native-jewelcase/
 # Owner-provided startup compilations are personal media, never release assets.
+/personal-media/
 /All Game Consoles Startups (1977 - Presents)/
 /All Nintendo, Xbox, PlayStation, Sega & Atari Startups (Switch 2 + Unused Brand ID)/
+# Owner-downloaded startup footage for the private PS5 override set.
+/Atari 5200 Startup/
+/Atari 7800 Start Up Original Hardware/
+/Bandai Wonderswan Color startup (Horizontal)/
+/Bandai Wonderswan Startup (Horizontal)/
+/Commodore 64 boot-up/
+/Commodore Amiga 500 Startup, Kickstart 1.3 And Game Loading Disk Drive Noises/
+/Nintendo Pokémon Mini Startup/
+/Sammy Atomiswave Startup (2003-2006)/
+/SNK Neo Geo Pocket Color Start-Up ✔/
+/C64 Boot screen/
+/Amiga 500 booting Workbench 1.3/
 PS5-INTEGRATION.md
 JEWEL-CASE-INTEGRATION.md
 SYSTEM-SUPPORT.md

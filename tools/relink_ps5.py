@@ -17,7 +17,7 @@ from build_ps5 import cached_run
 from ps5_common import ROOT, CACHE, fetch, prepare_archive, run, sha256
 from verify_ps5_build import require, source_fingerprint, verify, verify_recorded_hashes
 
-OBJECTS = ("model", "settings", "ui", "graphics", "codecs", "movie", "library", "filesystem", "metadata", "ftp", "launch_client",
+OBJECTS = ("model", "settings", "ui", "graphics", "codecs", "movie", "library", "filesystem", "metadata", "ftp", "launch_client", "console_tile_manager",
            "host_main", "json", "alloc", "vout", "shims", "lifecycle", "app_crt", "app_cpp_runtime")
 LIBRARIES = ("libSDL2.a", "libiconv.a", "libsamplerate.a")
 INPUTS = CACHE / "relink-inputs"

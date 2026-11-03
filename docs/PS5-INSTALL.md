@@ -1,6 +1,6 @@
 # Installing isShelf
 
-Native PS5 prototype v0.1.0-beta.1, tested on firmware **12.20**. The app appears as **isShelf**.
+Native PS5 stable release v0.1.0, tested on firmware **12.20**. The app appears as **isShelf**.
 
 For a guided first session, see [Start using isShelf](BEGINNERS.md). To add personal intro clips after installation, use the [step-by-step TV tutorial](PERSONAL-TV.md).
 
@@ -14,7 +14,7 @@ Installing Shelf does not set up a jailbreak, update firmware, change DNS/firewa
 
 Shelf includes its own small launcher helper. When you select a launch, the existing ELF loader runs that helper; it continues briefly after Shelf closes and asks the system to open the selected app. You do not manually load another Shelf payload or add one to autoload.
 
-The tested **standard-sdk** build retains the SDK's normal helper-process capability and syscall-bound initialization in RAM. Read the manifest's runtime notice before choosing this variant. The default restricted source build keeps the loader's permissions, but its running-app query is refused on the owner's console. Neither variant contains a firmware updater.
+The normal, tested **standard-sdk** build retains the SDK's helper-process capability and syscall-bound initialization in RAM and is required for emulator launching. Read the manifest's runtime notice before installing it. The explicitly selected restricted diagnostic build keeps the loader's permissions, but its running-app query is refused on the owner's console and it must not be installed as a launchable Shelf build. Neither variant contains a firmware updater.
 
 ## First installation
 
@@ -41,7 +41,15 @@ Open a console to choose a preferred detected emulator or show its game library.
 
 Highlight **Preferred emulator** and use Left/Right (or Cross) to cycle the detected choices. This selection saves in Shelf. For example, PlayStation 1 can offer PSXS5's own shelf and a RetroArch/SwanStation game route when both apps are detected. Both emulators can use the existing PS1 files: PSXS5 opens its own shelf, while the RetroArch game route receives the selected file. An emulator's own playlist is separate from Shelf's discovered library; switching the preference does not move games or convert saved data.
 
+The release also detects the dedicated PSSwanStation app (`PPSA99248`, build 25). To show an existing PSXS5 collection in PSSwanStation's Network tab, add `path = ftp://127.0.0.1:2121/data/PSXS5/games` to that app's `network.cfg`, then reopen it or choose **Scan for games**. This reads the same files through the PS5's existing ftpsrv; the games stay in place. Choose **PSSwanStation** in isShelf's PS1 preferred-emulator control to use its selected-game launch.
+
 Before selecting a game, read its launch panel. **Library only / Open emulator library** means you will choose the game inside that emulator after it opens. **Direct play / Play game** opens the selected game through RetroArch. This explanation stays visible while browsing; the Cross action in the footer matches it.
+
+## PS5 Home shortcuts
+
+After the library scan completes, open a console and choose **Add to PS5 Home Screen**. You can open its isShelf library, a supported standalone emulator menu, or isShelf with that console selected. PS4 and PS5 remain isShelf-only destinations. **Add or repair all emulator tiles** prepares every supported emulator shortcut in one batch.
+
+Registrations and removals are applied after isShelf closes. Always use the on-screen **Close isShelf and update PS5 Home** action when the batch finishes. To clean up, choose **Remove all isShelf tiles**; isShelf queues only exact-owned shortcuts and tells ShadowMount to refresh after closure. Unknown or mismatched titles are left alone.
 
 ## Upgrading and recovery
 

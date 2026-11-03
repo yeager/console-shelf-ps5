@@ -28,6 +28,7 @@ async function scenario(mode){
   connections++;sockets.add(socket);socket.on('error',()=>{});socket.on('close',()=>sockets.delete(socket));
   socket.on('data',bytes=>{received+=bytes.length;});
   socket.on('end',()=>{
+   if(mode==='probe')return;
    if(mode==='timeout')return;
    const text=fs.readFileSync(request,'utf8'),id=/^id=(\w+)$/m.exec(text)[1],issued=/^issued=(\d+)$/m.exec(text)[1];
    fs.unlinkSync(request);
@@ -40,6 +41,10 @@ async function scenario(mode){
   fs.writeFileSync(request,'earlier owned request');
   if(mode==='stale'){const earlier=new Date(Date.now()-60000);fs.utimesSync(request,earlier,earlier);}
  }
+ if(mode==='terminal-unconfirmed'){
+  const issued=Math.floor(Date.now()/1000);
+  fs.writeFileSync(status,`console-shelf-status 1\nid=${'a'.repeat(32)}\nissued=${issued}\nstate=unconfirmed\ncode=00000018\n`);
+ }
  if(mode==='closed')await new Promise(resolve=>server.close(resolve));
  try{
   const result=await new Promise((resolve,reject)=>{
@@ -51,7 +56,13 @@ async function scenario(mode){
   assert.equal(result.code,0,mode+': '+result.stderr+result.stdout);
   assert.equal(JSON.parse(result.stdout.trim()).helperExecuted,false);
   const text=fs.existsSync(status)?fs.readFileSync(status,'utf8'):'';
-  if(mode==='success'||mode==='stale')assert.match(text,/state=committed/);else assert.doesNotMatch(text,/state=committed/);
+  if(['success','stale','terminal-unconfirmed'].includes(mode))assert.match(text,/state=committed/);else assert.doesNotMatch(text,/state=committed/);
+  if(mode==='probe'){
+   assert.equal(connections,1,'probe sends one loopback transfer');
+   assert.equal(received,64,'probe sends exactly the supplied ELF bytes');
+   assert.ok(!fs.existsSync(request),'probe does not create a game launch request');
+   assert.ok(!fs.existsSync(status),'probe does not create a game launch status');
+  }
   if(mode==='busy')assert.equal(fs.readFileSync(request,'utf8'),'earlier owned request');else assert.ok(!fs.existsSync(request));
   if(mode==='stale')assert.equal(fs.readFileSync(path.join(directory,'launch-request.previous'),'utf8'),'earlier owned request');
   if(mode==='wrong-id')assert.match(text,new RegExp('id='+'f'.repeat(32)),'foreign reply must remain untouched');
@@ -64,7 +75,7 @@ async function scenario(mode){
 }
 (async()=>{
  const results=[];
- for(const mode of ['success','cancel-ready','late-ready-cancel','closed','timeout','wrong-id','busy','stale','invalid'])results.push(await scenario(mode));
+ for(const mode of ['success','cancel-ready','late-ready-cancel','closed','timeout','wrong-id','busy','stale','terminal-unconfirmed','invalid','probe'])results.push(await scenario(mode));
  fs.writeFileSync(path.join(root,'.cache/launch-client-tests/latest.json'),JSON.stringify({directory:build,helperExecuted:false,results},null,2)+'\n');
- console.log('PASS: nine loopback transport fixtures: commitment, cancellation, late/wrong replies, unavailable loader, timeout, stale recovery and ownership. No console/helper code executed.');
+ console.log('PASS: eleven loopback transport fixtures: game handoff, cancellation, stale recovery, terminal-unconfirmed reuse and pure one-send probe without game request. No console/helper code executed.');
 })().catch(error=>{console.error(error);process.exitCode=1;});

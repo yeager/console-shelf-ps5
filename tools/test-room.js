@@ -85,9 +85,9 @@ const fs = require('node:fs'), path = require('node:path'), assert = require('no
     await panel('Room'); await page.selectOption('#tvMode', 'picture');
     await page.locator('#tvPicture').setInputFiles(path.join(root, 'assets/3d-icons/ps2.png'));
     await page.waitForFunction(() => roomTv.images.has('picture')); await close();
-    assert.match(await page.locator('#roomTv img').getAttribute('src'), /^blob:/);
+    assert.match(await page.locator('#roomTv .tv-personal-picture').getAttribute('src'), /^blob:/);
     await page.reload(); await page.waitForFunction(() => roomTv.images.has('picture'));
-    assert.match(await page.locator('#roomTv img').getAttribute('src'), /^blob:/, 'chosen image survives reopen in local storage');
+    assert.match(await page.locator('#roomTv .tv-personal-picture').getAttribute('src'), /^blob:/, 'chosen image survives reopen in local storage');
     await panel('Room'); await page.selectOption('#tvMode', 'favorites'); await page.selectOption('#tvInterval', '10'); await close();
     await page.locator('.display-tier:not([hidden]) .card-main').first().focus(); await page.keyboard.press('Home');
     await page.locator('.card[data-system="ps2"] .card-main').click(); await page.click('#showLibrary');
@@ -103,11 +103,11 @@ const fs = require('node:fs'), path = require('node:path'), assert = require('no
     await page.selectOption('#introConsole', 'ps2'); await page.locator('#introPicture').setInputFiles(path.join(root, 'assets/shelf-icon.png'));
     await page.waitForFunction(() => roomTv.images.has('intro:ps2')); await close();
     await page.evaluate(() => selectShelf(shelfCards.findIndex(card => card.dataset.system === 'ps2')));
-    assert.match(await page.locator('#roomTv img').getAttribute('src'), /^blob:/, 'custom intro picture replaces the artwork fallback');
+    assert.match(await page.locator('#roomTv .tv-personal-picture').getAttribute('src'), /^blob:/, 'custom intro picture replaces the artwork fallback');
     await page.evaluate(() => selectShelf(shelfCards.findIndex(card => card.dataset.system === 'switch2')));
     assert.match(await page.locator('#roomTv').textContent(), /Your play room/, 'uninstalled console does not trigger an installed-only intro');
     await panel('Room'); await page.selectOption('#introScope', 'all'); await close();
-    assert.match(await page.locator('#roomTv img').getAttribute('src'), /intros\/switch2\.png$/, 'all-consoles intro choice includes the original still for reference hardware');
+    assert.match(await page.locator('#roomTv .tv-personal-picture').getAttribute('src'), /intros\/switch2\.png$/, 'all-consoles intro choice includes the original still for reference hardware');
     await panel('Room'); await page.selectOption('#tvNoise', 'emulator'); await close();
     assert.equal(await page.locator('#roomTv canvas').count(), 1, 'missing emulator can show static');
     assert.ok(await page.locator('#roomTv canvas').evaluate(canvas => canvas.width >= 500 && canvas.height >= 250), 'static uses fine screen-resolution grain instead of enlarged coarse blocks');

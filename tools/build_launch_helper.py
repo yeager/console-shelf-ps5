@@ -20,8 +20,11 @@ def main(standard_runtime=False):
     output.mkdir(parents=True, exist_ok=True)
     source = ROOT / "native/ps5/helper/shelf_launch.cpp"
     protocol = ROOT / "native/include/shelf/launch_protocol.hpp"
+    residual_guard = ROOT / "native/include/shelf/tile_residual_guard.hpp"
+    catalog = ROOT / "native/include/shelf/catalog.generated.hpp"
     limits = ROOT / "native/ps5/helper/runtime_limits.c"
-    inputs = {p.relative_to(ROOT).as_posix(): sha256(p) for p in (source, protocol, limits)}
+    tracked_inputs = (source, protocol, residual_guard, catalog, limits)
+    inputs = {p.relative_to(ROOT).as_posix(): sha256(p) for p in tracked_inputs}
     archive, sdk_source = prepare_sdk_source()
     crt_source = output / "sdk-crt"
     crt_source.mkdir(exist_ok=True)
@@ -102,6 +105,7 @@ def main(standard_runtime=False):
     require(shsize == 64 and 1 <= shcount <= 256 and shoff + shsize * shcount <= len(raw), "Invalid symbol sections")
     sections = [struct.unpack_from("<IIQQQQIIQQ", raw, shoff + i * shsize) for i in range(shcount)]
     symbols = {}
+    imports = set()
     for section in sections:
         if section[1] != 2:
             continue
@@ -110,8 +114,11 @@ def main(standard_runtime=False):
         require(section[9] == 24 and section[4] + section[5] <= len(raw), "Invalid helper symbol table")
         for index in range(0, section[5], 24):
             name, info, _, owner, address, size = struct.unpack_from("<IBBHQQ", raw, section[4] + index)
+            label = names[name:names.index(0, name)].decode()
             if owner and info & 15 == 2:
-                symbols[names[name:names.index(0, name)].decode()] = (info, address, size)
+                symbols[label] = (info, address, size)
+            elif not owner and info == 0x12:
+                imports.add(label)
     for hook in (() if standard_runtime else ("__patch_init", "__rtld_so_init", "__rtld_so_new")):
         require(hook in symbols, "Missing permission-preserving CRT hook")
         info, address, size = symbols[hook]
@@ -121,7 +128,10 @@ def main(standard_runtime=False):
     forbidden = ("kernel_copyin", "kernel_proc_copyin", "mdbg_call", "patch_kernel_ucred", "patch_syscall_permissions")
     require(standard_runtime or not any(name.startswith(("kernel_set_", "mdbg_")) or name in forbidden for name in symbols),
             "Unexpected kernel write or credential-changing routine remains in helper")
-    require(inputs == {p.relative_to(ROOT).as_posix(): sha256(p) for p in (source, protocol, limits)}, "Build input drift")
+    require(raw.count(b"ISSHELF_EXACT_ORIGIN_CLOSE_V1") == 1 and
+            "sceLncUtilKillApp" in imports,
+            "Exact-origin close marker or strong import differs")
+    require(inputs == {p.relative_to(ROOT).as_posix(): sha256(p) for p in tracked_inputs}, "Build input drift")
     result = {"elf": {"bytes": len(raw), "sha256": sha256(elf)}, "inputs": inputs,
               "hardwareTest": "not run", "transport": "not connected", "deployed": False,
               "abi": "System V ABI 0, matching pinned SDK v0.42 crt1.o; not a native app/SELF",
@@ -131,7 +141,9 @@ def main(standard_runtime=False):
               "permissionChanges": standard_runtime,
               "crtPatchHook": ("Unmodified pinned SDK startup; targets helper process capabilities and syscall bounds"
                                if standard_runtime else "verified return 0; SDK patch.c excluded; kernel write routines absent"),
-              "policy": "cooperative Shelf closure; one SystemService launch and read-only focus observation; no process kill, launch retry or emulator-file writes",
+              "policy": "cooperative Shelf closure; after five stuck committed seconds, one exact PPSA99541 origin close; one selected SystemService launch, or after a 3 s post-close settle and a read-only fixed-loopback readiness window of at most 8 s, one fixed tile uninstall, one bounded owned-title removal/artwork batch, or the complete ordered PPSA99700..PPSA99751 residual sweep; readiness polling continuously proves no foreground app and sends no HTTP request; authorization is rechecked before the first mutation; residual cleanup first proves the manual list excludes every protected slot and preflights every global registration as absent or exact platform-owned isShelf identity and artwork before any uninstall; maintenance is paced at 1000 ms and followed by one scan; maintenance retries only the same title after an exact game_active or scanner_busy receipt, five continuous idle seconds, and no observed big app, with at most five retries per title; long maintenance may update only its exact nonce-and-issued status owner; read-only focus observation; no arbitrary process kill, launch retry or emulator-file writes",
+              "exactOriginClose": {"titleId": "PPSA99541", "delayMs": 5000,
+                                     "attempts": 1, "marker": "ISSHELF_EXACT_ORIGIN_CLOSE_V1"},
               "approvalForStandardRuntime": "required before console use" if standard_runtime else "not applicable"}
     (output / "build.json").write_text(json.dumps(result, indent=2) + "\n")
     print(json.dumps(result, indent=2))

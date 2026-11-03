@@ -58,6 +58,62 @@ visibility_symbol = next(symbols + offset for offset in range(0, tags[0x6100003f
                          if struct.unpack_from("<I", original, symbols + offset)[0] == visibility_name - strings)
 reject("required-visibility-import-weak", lambda b: b.__setitem__(visibility_symbol + 4, 0x22))
 reject("required-visibility-import-missing", lambda b: b.__setitem__(visibility_name, ord("X")))
+self_close_marker = original.index(b"ISSHELF_EXACT_SELF_CLOSE_V1")
+reject("exact-self-close-marker-missing", lambda b: b.__setitem__(self_close_marker, ord("X")))
+for self_close_name in ("sceLncUtilInitialize", "sceLncUtilGetAppIdOfRunningBigApp",
+                        "sceLncUtilGetAppTitleId", "sceLncUtilKillApp"):
+    self_close_import = original.index((public_nid(self_close_name) + "#").encode(),
+                                       strings, strings + tags[10])
+    self_close_symbol = next(symbols + offset for offset in range(0, tags[0x6100003f], 24)
+                             if struct.unpack_from("<I", original, symbols + offset)[0] ==
+                             self_close_import - strings)
+    reject("exact-self-close-" + self_close_name + "-weak",
+           lambda b, offset=self_close_symbol: b.__setitem__(offset + 4, 0x22))
+    reject("exact-self-close-" + self_close_name + "-missing",
+           lambda b, offset=self_close_import: b.__setitem__(offset, ord("X")))
+private_marker = original.find(b"ISSHELF_PRIVATE_UI_TEST_BRIDGE_V1")
+private_import_fixtures = 0
+for private_name in ("open", "read", "write", "fchmod"):
+    encoded = (public_nid(private_name) + "#").encode()
+    if private_marker >= 0:
+        private_import = original.index(encoded, strings, strings + tags[10])
+        reject("private-" + private_name + "-missing",
+               lambda b, offset=private_import: b.__setitem__(offset, ord("X")))
+        private_import_fixtures += 1
+    elif private_name == "open":
+        assert encoded in original[strings:strings + tags[10]]
+    else:
+        assert encoded not in original[strings:strings + tags[10]]
+owned_marker = original.find(b"ISSHELF_OWNED_TILE_WRITES_V1")
+if owned_marker >= 0:
+    reject("owned-tile-marker-missing", lambda b: b.__setitem__(owned_marker, ord("X")))
+    for write_name in ("rmdir", "chmod"):
+        write_import = original.index((public_nid(write_name) + "#").encode(),
+                                      strings, strings + tags[10])
+        reject("owned-tile-" + write_name + "-missing",
+               lambda b, offset=write_import: b.__setitem__(offset, ord("X")))
+assert (public_nid("fdopendir") + "#").encode() not in original[strings:strings + tags[10]]
+assert (public_nid("getdirentries") + "#").encode() not in original[strings:strings + tags[10]]
+ps2_action = original.find(b"probe-ps2-source\x00")
+identity_import_fixtures = 0
+if ps2_action >= 0:
+    reject("protected-source-action-missing", lambda b: b.__setitem__(ps2_action, ord("X")))
+    for identity_name in ("getuid", "geteuid"):
+        identity_import = original.index((public_nid(identity_name) + "#").encode(), strings, strings + tags[10])
+        reject("protected-source-" + identity_name + "-missing",
+               lambda b, offset=identity_import: b.__setitem__(offset, ord("X")))
+        identity_import_fixtures += 1
+else:
+    for identity_name in ("getuid", "geteuid"):
+        assert (public_nid(identity_name) + "#").encode() not in original[strings:strings + tags[10]]
+direct_action = original.find(b"probe-ps2-direct\x00")
+direct_result = original.find(b"ps2-direct-matched\x00")
+assert (direct_action >= 0) == (direct_result >= 0)
+if direct_action >= 0:
+    reject("protected-source-direct-action-missing",
+           lambda b: b.__setitem__(direct_action, ord("X")))
+    reject("protected-source-direct-result-missing",
+           lambda b: b.__setitem__(direct_result, ord("X")))
 bad_self = folder / "bad-wrapper.bin"
 bad_self.write_bytes(b"BAD!" + self_file.read_bytes()[4:])
 try:
@@ -80,4 +136,7 @@ except ValueError:
     pass
 else:
     raise RuntimeError("Verifier accepted a SELF changed after container validation")
-print("PASS: PS5 verifier rejects fourteen damaged/foreign fixtures, including weak/missing/misbound lifecycle and visibility imports, without modifying the original executable.")
+fixture_count = (22 + private_import_fixtures + identity_import_fixtures +
+                 (1 if ps2_action >= 0 else 0) + (2 if direct_action >= 0 else 0) +
+                 (3 if owned_marker >= 0 else 0))
+print(f"PASS: PS5 verifier rejects {fixture_count} damaged/foreign fixtures and enforces the selected public/private import contract without modifying the original executable.")

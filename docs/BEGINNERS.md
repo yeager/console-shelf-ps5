@@ -2,11 +2,11 @@
 
 isShelf is a front door to the games and emulators already on your PS5. It organises the collection and opens the available launch route. It does not include or install games, emulators, BIOS files or a jailbreak.
 
-This guide covers **v0.1.0-beta.1**, tested on firmware **12.20**. Keep your working firmware and decline system software update prompts.
+This guide covers stable **v0.1.0**, tested on firmware **12.20**. Keep your working firmware and decline system software update prompts.
 
 ## 1. Install the app once
 
-Use the [installation guide](PS5-INSTALL.md) if isShelf is not on your PS5 yet. Download **PPSA99541.zip** from the [release page](https://github.com/Iswebro/console-shelf-ps5/releases/tag/v0.1.0-beta.1). The larger **Source-and-Relink.zip** is for source/tools; it is not the app to install.
+Use the [installation guide](PS5-INSTALL.md) if isShelf is not on your PS5 yet. Download **PPSA99541.zip** from the [stable release page](https://github.com/Iswebro/console-shelf-ps5/releases/tag/v0.1.0). The larger **Source-and-Relink.zip** is for source/tools; it is not the app to install.
 
 You need an existing homebrew setup with ShadowMountPlus, the console's ELF loader on port **9021** and `ftpsrv` on **2121**. isShelf needs FTP for discovery even when running on the console. It does not start those services for you. Its own launch helper is included: there is no extra isShelf payload to add to autoload.
 
@@ -63,15 +63,28 @@ For example, PSXS5 opens its own PlayStation library. With RetroArch/SwanStation
 
 Close the previous emulator before starting another through isShelf. A discovered game or installed core is not a promise that every game is compatible. [Tested launch scope](INTEGRATION.md).
 
+## 5. Add or remove PS5 Home shortcuts
+
+Wait for isShelf's library scan to finish, open any console, then select **Add to PS5 Home Screen** (or **Edit PS5 Home Screen shortcut** if it already exists).
+
+- **isShelf game library** opens that console's games inside isShelf.
+- **Direct emulator menu** opens a supported standalone emulator with that console selected. Shared RetroArch systems use the isShelf library because RetroArch cannot select a console without a game.
+- **isShelf home** opens isShelf with that console selected.
+- PS4 and PS5 shortcuts always open in isShelf; they cannot be set to open an emulator.
+
+Choose **Add or repair all emulator tiles** to create every shortcut supported by the completed scan. When it finishes, select **Close isShelf and update PS5 Home**. ShadowMount applies the queued registrations only after isShelf closes.
+
+To clean up, open the same screen and choose **Remove this tile** or **Remove all isShelf tiles**. The app queues only shortcuts carrying isShelf's exact ownership record. Follow the on-screen **Close isShelf** action so ShadowMount can refresh Home. If a shortcut remains, reopen isShelf and use the verification/cleanup action; recovery data is deliberately kept until removal is confirmed.
+
 ### Return to an emulator's menu
 
 Once a game is running, its controls belong to the emulator. isShelf cannot impose one menu shortcut across them. Use that emulator's configured Quick Menu/menu combination. For example, the owner's RetroArch setup uses Options + touchpad click; installing isShelf does not configure that combination on someone else's console.
 
-## 5. Add more games
+## 6. Add more games
 
 Install the game into its emulator's normal library first and confirm it works **inside the emulator**. Then close the emulator and reopen isShelf with `ftpsrv` available. isShelf rescans at startup; no second copy is needed just for isShelf.
 
-Existing locations recognised by this beta include:
+Existing locations recognised by this release include:
 
 | Library | Existing PS5 folder |
 | --- | --- |
@@ -83,7 +96,7 @@ Existing locations recognised by this beta include:
 
 Keep companion files together: a PS1 CUE needs its referenced tracks, and a multi-disc M3U needs its referenced discs. ZIPs, BIOS, keys, emulator dependencies and unfinished downloads are not games to import into isShelf. Some emulator formats and custom folders are not yet supported. [Discovery details and limits](DISCOVERY.md).
 
-## 6. Personalise the room
+## 7. Personalise the room
 
 Press Square until you reach **Shelf**, then open **Settings → Play room**. Try the clock, your name/message, rotating favourite games, or the bundled original intro videos.
 
@@ -99,9 +112,10 @@ Want your own startup videos? Follow [Personal TV media, step by step](PERSONAL-
 | One console is missing | Clear search/brand/availability filters; check its visibility switch and whether One curated shelf is enabled. |
 | Random dependencies or a missing ZIP | Use the emulator's real game folder and supported unpacked format. isShelf is not a general file browser or archive extractor. |
 | Emulator opens, but not the selected game | Read the persistent launch panel. **Library only** is the current behaviour for standalone PSXS5/PS5SX2/PS5SX3. |
+| A new or removed Home shortcut is not visible yet | Use the screen's **Close isShelf** action and wait for ShadowMount to finish refreshing PS5 Home. |
 | Game also fails when opened inside the emulator | Check the dump, BIOS/companion files and emulator compatibility. A different isShelf setting cannot fix that game. |
 | Launch does nothing | Close other apps; check your existing ELF loader is available. Preserve the launch logs before another attempt. |
-| Black screen briefly before the interface | This opening gap is a known beta limitation. |
+| Opening background never reaches the controls | Hold Circle to close if input still works, then reopen after confirming FTP/ShadowMount services are ready. Preserve the startup log before retrying. |
 | Personal TV video does not appear | [TV troubleshooting](PERSONAL-TV.md#troubleshooting): check the mode, filename, format, intro scope, static and motion settings. |
 
 For a launch bug, copy `/data/console-shelf/startup.log`, `launch-helper.log` and `launch-status.txt` to your PC **before opening isShelf again**. Include the isShelf version, PS5 firmware, selected emulator/game and exact message when reporting. Review logs and captures for personal information before sharing; remove IP addresses, credentials and anything private. Do not attach games, saves, BIOS, keys or firmware files.

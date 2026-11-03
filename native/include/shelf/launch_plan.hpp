@@ -68,6 +68,16 @@ inline LaunchPlan plan_game(const Library& library, std::size_t index, std::stri
     if (plan_emulator(library, game.system, preference, request) == LaunchPlan::unavailable)
         return LaunchPlan::unavailable;
     const auto* route = preferred_route(library, game.system, preference);
+    if (std::strcmp(route->title_id, "PPSA99248") == 0) {
+        if (game.system != find_system("ps1") || !launch_ps1_path(game.path))
+            return LaunchPlan::unavailable;
+        const int used = std::snprintf(request.rom, sizeof(request.rom), "%.*s%s",
+                                       static_cast<int>(psswan_ftp_origin.size()), psswan_ftp_origin.data(), game.path);
+        if (used <= 0 || static_cast<std::size_t>(used) >= sizeof(request.rom))
+            return LaunchPlan::unavailable;
+        request.mode = LaunchMode::psswan_game;
+        return LaunchPlan::direct_game;
+    }
     if (std::strcmp(route->title_id, "PPSA99169") != 0)
         return LaunchPlan::menu;
     if (!launch_bounded(route->core) || !launch_media_path(game.path))

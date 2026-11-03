@@ -23,7 +23,17 @@ void test_ui();
 void test_library();
 void test_navigation();
 void test_launch();
+void test_ui_test_bridge();
+void test_console_tile_startup();
+void test_pairing_code_entry();
+void test_console_tile_relay();
+void test_console_tile_forwarder_config();
+void test_ui_test_preview();
 int main() {
+    test_console_tile_forwarder_config();
+    test_console_tile_relay();
+    test_pairing_code_entry();
+    test_console_tile_startup();
     using namespace shelf;
     Preferences preferences;
     Inventory inventory{};
@@ -99,5 +109,7 @@ int main() {
     test_navigation();
     test_library();
     test_launch();
+    test_ui_test_bridge();
+    test_ui_test_preview();
     return 0;
 }

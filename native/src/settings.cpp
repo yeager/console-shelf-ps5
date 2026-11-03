@@ -109,6 +109,16 @@ bool valid(const Settings& settings) {
         if (!std::memchr(route.data(), 0, route.size()) || !valid_route(route.data()))
             return false;
     }
+    for (std::size_t i = 0; i < system_count; ++i) {
+        const auto& slot = settings.shortcut_routes[i];
+        if (slot.input != tile_route::Input::absent &&
+            slot.input != tile_route::Input::valid &&
+            slot.input != tile_route::Input::invalid)
+            return false;
+        if (slot.input == tile_route::Input::valid &&
+            (slot.preference.system != i || !tile_route::preference_valid(slot.preference)))
+            return false;
+    }
     if (static_cast<std::size_t>(std::count(p.shelf_selected.begin(), p.shelf_selected.end(), true)) > shelf_capacity)
         return false;
     for (std::size_t i = 0; i < settings.game_favorites.size(); ++i)
@@ -131,6 +141,7 @@ bool read_file(const char* path, Settings& output) {
     Settings parsed;
     constexpr std::size_t room_keys = 11 + system_count * 4;
     std::array<bool, room_keys + 5 + 64> seen{};
+    std::array<bool, system_count> shortcut_route_seen{};
     char line[256];
     std::size_t bytes = 0;
     bool okay = true;
@@ -272,9 +283,12 @@ bool read_file(const char* path, Settings& output) {
             if (!dot)
                 continue; // Unknown future keys never become console identities.
             const auto id = find_system(dot + 1);
-            if (id == system_count)
-                continue;
             const auto prefix = static_cast<std::size_t>(dot - line);
+            if (id == system_count) {
+                if (prefix == 5 && std::strncmp(line, "route", 5) == 0)
+                    okay = false;
+                continue;
+            }
             if ((prefix == 6 && std::strncmp(line, "hidden", 6) == 0) ||
                 (prefix == 8 && std::strncmp(line, "favorite", 8) == 0)) {
                 if (std::strcmp(value, "0") != 0 && std::strcmp(value, "1") != 0)
@@ -294,6 +308,21 @@ bool read_file(const char* path, Settings& output) {
                     okay = false;
                 else
                     std::memcpy(parsed.preferred_emulator[id].data(), value, std::strlen(value) + 1);
+            } else if (prefix == 5 && std::strncmp(line, "route", 5) == 0) {
+                auto& slot = parsed.shortcut_routes[id];
+                if (shortcut_route_seen[id]) {
+                    slot.input = tile_route::Input::invalid;
+                    slot.preference = {};
+                } else {
+                    shortcut_route_seen[id] = true;
+                    tile_route::Preference preference;
+                    if (tile_route::settings_codec::parse_value(id, value, preference)) {
+                        slot.input = tile_route::Input::valid;
+                        slot.preference = preference;
+                    } else {
+                        slot.input = tile_route::Input::invalid;
+                    }
+                }
             }
         }
         if (key >= 0) {
@@ -399,6 +428,12 @@ bool save_settings(const char* path, const Settings& settings) {
                          id.data(), p.hidden[i] ? 1 : 0, static_cast<int>(id.size()), id.data(), p.favorite[i] ? 1 : 0,
                          static_cast<int>(id.size()), id.data(), settings.preferred_emulator[i].data(),
                          static_cast<int>(id.size()), id.data(), p.shelf_selected[i] ? 1 : 0) > 0;
+        if (okay && settings.shortcut_routes[i].input == tile_route::Input::valid) {
+            char line[256];
+            okay = tile_route::settings_codec::encode_line(
+                settings.shortcut_routes[i].preference, line, sizeof(line)) &&
+                std::fprintf(file, "%s", line) > 0;
+        }
     }
     if (!flush_file(file))
         okay = false;
