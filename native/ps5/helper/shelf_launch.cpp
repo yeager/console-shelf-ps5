@@ -59,7 +59,7 @@ namespace {
 constexpr char exact_origin_close_marker[] =
     "ISSHELF_EXACT_ORIGIN_CLOSE_V1";
 constexpr char exact_update_relaunch_marker[] =
-    "ISSHELF_EXACT_UPDATE_RELAUNCH_V2";
+    "ISSHELF_EXACT_UPDATE_RELAUNCH_V3";
 [[gnu::used]] constexpr char update_debug_notice_marker[] =
     "ISSHELF_UPDATE_DEBUG_NOTICES_V1";
 constexpr char request_path[] = "/data/console-shelf/launch-request.txt";
@@ -310,6 +310,7 @@ int launch_update_target(void* raw) {
     const int user_status = sceUserServiceGetForegroundUser(&user);
     int result = user_status;
     if (user_status == 0 && user >= 0 && user == context.user) {
+        debug_notice("Starting isShelf...");
         params.user = user;
         result = sceLncUtilLaunchApp(shelf::shelf_title_id, nullptr, &params);
     } else if (user_status == 0) {
@@ -319,10 +320,11 @@ int launch_update_target(void* raw) {
     if (context.journal) {
         std::fprintf(context.journal,
                      "isShelf update relaunch attempt %u: sceLncUtilLaunchApp(%s, user %d)="
-                     "0x%08x user_query=0x%08x settle_ms=%u\n",
+                     "0x%08x user_query=0x%08x settle_ms=%u observe_ms=%u single_request=1\n",
                      context.update_relaunch_attempts, shelf::shelf_title_id,
                      user, static_cast<unsigned>(result), static_cast<unsigned>(user_status),
-                     shelf::update_relaunch_settle_ms);
+                     shelf::update_relaunch_settle_ms,
+                     shelf::update_relaunch_observe_ms);
         std::fflush(context.journal);
     }
     return result;
@@ -880,7 +882,8 @@ int launch(void* raw, const shelf::LaunchRequest& request) {
         if (transaction >= 0) {
             char message[160];
             std::snprintf(message, sizeof(message),
-                          "isShelf %s installed. Opening isShelf...", request.rom);
+                          "isShelf %s installed. Waiting for PS5 Home, then opening isShelf...",
+                          request.rom);
             debug_notice(message);
             reopened = shelf::relaunch_updated_shelf(
                 {&context, update_relaunch_state, launch_update_target, wait});
@@ -892,10 +895,12 @@ int launch(void* raw, const shelf::LaunchRequest& request) {
         if (context.journal) {
             std::fprintf(context.journal,
                          "isShelf update: transaction=0x%08x relaunch_result=%d relaunch_code=0x%08x "
-                         "attempts=%u settle_ms=%u marker=%s\n",
+                         "attempts=%u settle_ms=%u observe_ms=%u marker=%s\n",
                          static_cast<unsigned>(transaction), static_cast<int>(reopened.result),
                          static_cast<unsigned>(reopened.last_code), reopened.attempts,
-                         shelf::update_relaunch_settle_ms, exact_update_relaunch_marker);
+                         shelf::update_relaunch_settle_ms,
+                         shelf::update_relaunch_observe_ms,
+                         exact_update_relaunch_marker);
             std::fflush(context.journal);
         }
         if (transaction < 0)

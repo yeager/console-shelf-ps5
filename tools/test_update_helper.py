@@ -247,7 +247,7 @@ def main():
     assert_program(app, PROGRAM_NEW)
     assert_sentinels(root, protected)
 
-    print("PASS: updater transaction recovery and bounded exact-title relaunch preserve every tested safety boundary.")
+    print("PASS: updater recovery and single-request exact-title relaunch preserve every tested safety boundary.")
 
 
 if __name__ == "__main__":
