@@ -133,6 +133,8 @@ const fs = require('node:fs'), path = require('node:path'), assert = require('no
     await page.reload(); await page.waitForFunction(() => roomTv.videos.has('intro:ps2'));
     assert.equal(await page.locator('#tvNoise').inputValue(), 'off', 'static preference survives reopen');
     await page.setViewportSize({ width: 390, height: 844 });
+    await page.waitForFunction(() => shelfColumns === 2 &&
+      document.querySelectorAll('.display-tier:not([hidden]) .card').length === 4);
     assert.equal(await page.locator('#roomTv').isVisible(), false, 'cropped-away TV does not spill over the phone controls');
     assert.equal(await page.locator('.display-tier:not([hidden]) .card').count(), 4, 'phone still pages at its physical capacity');
     await shot('room-mobile.png');
