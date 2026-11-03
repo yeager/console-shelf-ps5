@@ -10,7 +10,8 @@ Imported components:
 - ps5/third_party/mbedtls/port/ps5sx2_mbedtls_platform.c
 - ps5/installer/ca/cacert.pem
 - ps5/coreorbis/orbis-shims/ehframe.ld (adapted linker bounds only)
-- ps5/coreorbis/relaunch/relaunch.c (adapted bounded exact-title retry and running-title confirmation design)
+- ps5/coreorbis/relaunch/relaunch.c (adapted minimum post-exit settle, bounded exact-title retry and running-title confirmation design)
+- ps5/installer/src/plat_ps5.c and install.c (adapted PS5 kernel debug-toast layout and update milestone/quarter-progress notification pattern)
 
 License: GPL-3.0-or-later. The full GNU GPL version 3 text is supplied as
 LICENSE at the root of the isShelf package. Modifications remain available in

@@ -1019,6 +1019,9 @@ int main(int argc, char** argv) {
     if (shelf::take_update_result(data, update_result_notice)) {
         std::snprintf(state.notice, sizeof(state.notice), "%s", update_result_notice);
         startup("in-app update result", update_result_notice);
+        char message[256];
+        std::snprintf(message, sizeof(message), "isShelf update: %s", update_result_notice);
+        gs_notify(message);
     }
 #endif
     SDL_SetMainReady();
@@ -1104,6 +1107,9 @@ int main(int argc, char** argv) {
     char recovery_update_tag[32]{}, recovery_manifest_sha256[65]{};
     bool recovery_committed = false;
     bool update_initialized = false, update_preparing = false;
+    int update_download_quarter = 0;
+    bool update_download_finished_notice = false;
+    bool update_preparing_files_notice = false;
     char update_ca_path[2304];
     std::snprintf(update_ca_path, sizeof(update_ca_path), "%s/assets/update-ca.pem", assets);
 #endif
@@ -1393,6 +1399,7 @@ int main(int argc, char** argv) {
             std::snprintf(state.notice, sizeof(state.notice),
                           "Update paused safely. Choose Update now later to resume it.");
             startup("in-app update paused", "partial files retained for resume");
+            gs_notify("isShelf update paused safely. The partial download was kept for later.");
             redraw = true;
         }
         if (state.update_accept_requested) {
@@ -1400,11 +1407,18 @@ int main(int argc, char** argv) {
             if (state.update_prompt == shelf::UpdatePrompt::available) {
                 if (updater.prepare(offered_update, data, update_ca_path)) {
                     update_preparing = true;
+                    update_download_quarter = 0;
+                    update_download_finished_notice = false;
+                    update_preparing_files_notice = false;
                     state.update_prompt = shelf::UpdatePrompt::preparing;
                     state.update_progress = 0;
                     std::snprintf(state.update_message, sizeof(state.update_message),
                                   "Downloading and verifying the official production package.");
                     startup("owner approved in-app update", offered_update.tag);
+                    char message[160];
+                    std::snprintf(message, sizeof(message),
+                                  "Downloading isShelf %s (resumable): 0%%", offered_update.tag);
+                    gs_notify(message);
                 } else {
                     state.update_prompt = shelf::UpdatePrompt::none;
                     std::snprintf(state.notice, sizeof(state.notice),
@@ -1423,6 +1437,7 @@ int main(int argc, char** argv) {
                               recovery_manifest_sha256);
                 state.launch_requested = true;
                 startup("owner approved update resume", recovery_update_tag);
+                gs_notify("isShelf update recovery approved. isShelf will close, finish safely, and reopen.");
                 redraw = true;
             }
         }
@@ -1431,6 +1446,25 @@ int main(int argc, char** argv) {
             if (progress != state.update_progress) {
                 state.update_progress = progress;
                 redraw = true;
+            }
+            if (progress >= 5 && progress < 50) {
+                const int download_percent = std::clamp((progress - 5) * 100 / 45, 0, 99);
+                const int quarter = std::min(3, download_percent / 25);
+                if (quarter > update_download_quarter) {
+                    update_download_quarter = quarter;
+                    char message[160];
+                    std::snprintf(message, sizeof(message), "Downloading isShelf %s: %d%%",
+                                  offered_update.tag, quarter * 25);
+                    gs_notify(message);
+                }
+            }
+            if (progress >= 50 && !update_download_finished_notice) {
+                update_download_finished_notice = true;
+                gs_notify("isShelf download complete. Checking its SHA-256 signature...");
+            }
+            if (progress > 50 && !update_preparing_files_notice) {
+                update_preparing_files_notice = true;
+                gs_notify("isShelf package verified. Preparing the installation files...");
             }
         }
         shelf::UpdateWorkOutcome update_outcome;
@@ -1445,6 +1479,11 @@ int main(int argc, char** argv) {
                 std::snprintf(state.update_message, sizeof(state.update_message), "%s",
                               update_outcome.message);
                 startup("production update available", offered_update.tag);
+                char message[160];
+                std::snprintf(message, sizeof(message),
+                              "isShelf %s is available. Choose Update now to install it.",
+                              offered_update.tag);
+                gs_notify(message);
             } else if (update_outcome.state == shelf::UpdateWorkState::ready) {
                 state.update_prompt = shelf::UpdatePrompt::none;
                 state.pending_launch = {};
@@ -1457,6 +1496,11 @@ int main(int argc, char** argv) {
                               update_outcome.manifest_sha256);
                 state.launch_requested = true;
                 startup("verified update staged", update_outcome.release.tag);
+                char message[192];
+                std::snprintf(message, sizeof(message),
+                              "isShelf %s is verified and ready. It will close to install, then reopen.",
+                              update_outcome.release.tag);
+                gs_notify(message);
             } else if (update_outcome.state == shelf::UpdateWorkState::cancelled) {
                 state.update_prompt = shelf::UpdatePrompt::none;
                 std::snprintf(state.notice, sizeof(state.notice),
@@ -1467,6 +1511,13 @@ int main(int argc, char** argv) {
                         update_outcome.message);
                 if (was_preparing)
                     std::snprintf(state.notice, sizeof(state.notice), "%s", update_outcome.message);
+                if (was_preparing) {
+                    char message[256];
+                    std::snprintf(message, sizeof(message),
+                                  "isShelf update stopped: %s Nothing was installed.",
+                                  update_outcome.message);
+                    gs_notify(message);
+                }
             } else {
                 startup("background update check complete", update_outcome.message);
             }
@@ -2118,6 +2169,9 @@ int main(int argc, char** argv) {
                 const auto visibility_status = gs_app_visibility(&visibility);
                 const auto decision = launch_visibility.sample(now, visibility_status, visibility);
                 if (decision == shelf::LaunchVisibilityDecision::commit && launcher.commit()) {
+                    if (state.pending_launch.mode == shelf::LaunchMode::self_update ||
+                        state.pending_launch.mode == shelf::LaunchMode::update_recover)
+                        gs_notify("isShelf is closing now to install the update. It will reopen automatically.");
                     state.presentation.launching = true;
                     circle_at = now;
                     close_gesture.begin_close(now);

@@ -35,6 +35,12 @@ constexpr char target_root[] = SHELF_UPDATE_APP_ROOT;
 constexpr char result_path[] = SHELF_UPDATE_DATA_ROOT "/update/result.txt";
 constexpr char result_temporary[] = SHELF_UPDATE_DATA_ROOT "/update/result.tmp";
 
+void announce(UpdateTransactionNotifier notifier, void* context,
+              UpdateTransactionStage stage, const char* tag) {
+    if (notifier)
+        notifier(context, stage, tag);
+}
+
 enum class Node { missing, file, directory, other, failed };
 struct LoadedManifest {
     char* text = nullptr;
@@ -381,7 +387,8 @@ bool finalize(const LoadedManifest& loaded, FILE* log) {
     }
     return okay;
 }
-int recover(const LaunchRequest& request, LoadedManifest& loaded, FILE* log, bool& found) {
+int recover(const LaunchRequest& request, LoadedManifest& loaded, FILE* log, bool& found,
+            UpdateTransactionNotifier notifier, void* notifier_context) {
     found = false;
     const auto state = node(journal_path);
     if (state == Node::missing) return 0;
@@ -391,10 +398,12 @@ int recover(const LaunchRequest& request, LoadedManifest& loaded, FILE* log, boo
     if (!journal(journal_state, journal_sha) || std::strcmp(journal_sha, loaded.sha256) != 0)
         return -EINVAL;
     if (std::strcmp(journal_state, "COMMIT") == 0) {
+        announce(notifier, notifier_context, UpdateTransactionStage::finishing, request.rom);
         if (!finalize(loaded, log)) return -EIO;
         result("installed", request.rom, "Interrupted cleanup completed; the verified update was already committed.");
         return 1;
     }
+    announce(notifier, notifier_context, UpdateTransactionStage::restoring, request.rom);
     if (!rollback(loaded, log)) {
         result("recovery-failed", request.rom, "Rollback could not restore every previous program file.");
         return -EIO;
@@ -403,8 +412,10 @@ int recover(const LaunchRequest& request, LoadedManifest& loaded, FILE* log, boo
     result("rolled-back", request.rom, "The interrupted update was rolled back; previous program files were restored.");
     return 2;
 }
-int apply(const LaunchRequest& request, LoadedManifest& loaded, FILE* log) {
+int apply(const LaunchRequest& request, LoadedManifest& loaded, FILE* log,
+          UpdateTransactionNotifier notifier, void* notifier_context) {
     if (!staged_files_match(loaded) || !preflight_targets(loaded)) return -EINVAL;
+    announce(notifier, notifier_context, UpdateTransactionStage::installing, request.rom);
     if (!write_journal(loaded.sha256, "BEGIN")) return -EIO;
     bool okay = true;
 #ifdef SHELF_UPDATE_HOST_TEST
@@ -444,6 +455,7 @@ int apply(const LaunchRequest& request, LoadedManifest& loaded, FILE* log) {
     }
     if (okay) okay = target_files_match(loaded);
     if (!okay) {
+        announce(notifier, notifier_context, UpdateTransactionStage::restoring, request.rom);
         const bool restored = rollback(loaded, log);
         if (restored) (void)unlink_durable(journal_path);
         result(restored ? "rolled-back" : "recovery-failed", request.rom,
@@ -452,6 +464,7 @@ int apply(const LaunchRequest& request, LoadedManifest& loaded, FILE* log) {
         return -EIO;
     }
     if (!write_journal(loaded.sha256, "COMMIT")) {
+        announce(notifier, notifier_context, UpdateTransactionStage::restoring, request.rom);
         const bool restored = rollback(loaded, log);
         if (restored) (void)unlink_durable(journal_path);
         result(restored ? "rolled-back" : "recovery-failed", request.rom,
@@ -459,6 +472,7 @@ int apply(const LaunchRequest& request, LoadedManifest& loaded, FILE* log) {
                         : "The update could not commit and automatic rollback needs attention.");
         return -EIO;
     }
+    announce(notifier, notifier_context, UpdateTransactionStage::finishing, request.rom);
     if (!finalize(loaded, log)) {
         result("cleanup-pending", request.rom,
                "The verified update committed; cleanup will finish the next time isShelf opens.");
@@ -469,7 +483,9 @@ int apply(const LaunchRequest& request, LoadedManifest& loaded, FILE* log) {
 }
 } // namespace
 
-int apply_update_transaction(const LaunchRequest& request, FILE* log) {
+int apply_update_transaction(const LaunchRequest& request, FILE* log,
+                             UpdateTransactionNotifier notifier,
+                             void* notifier_context) {
     if (log) {
         std::fprintf(log, "update transaction: %s\n", update_transaction_marker);
         std::fflush(log);
@@ -477,13 +493,16 @@ int apply_update_transaction(const LaunchRequest& request, FILE* log) {
     if ((request.mode != LaunchMode::self_update && request.mode != LaunchMode::update_recover) ||
         std::strcmp(request.title, shelf_title_id) != 0 || !update_hex_sha256(request.core))
         return -EINVAL;
+    announce(notifier, notifier_context, UpdateTransactionStage::verifying, request.rom);
     LoadedManifest loaded;
     if (!load_manifest(request, loaded)) {
         result("recovery-failed", request.rom, "The staged manifest no longer matches the owner-approved update.");
         return -EINVAL;
     }
     bool found = false;
-    const int recovered = recover(request, loaded, log, found);
+    if (node(journal_path) != Node::missing)
+        announce(notifier, notifier_context, UpdateTransactionStage::recovering, request.rom);
+    const int recovered = recover(request, loaded, log, found, notifier, notifier_context);
     if (recovered < 0) return recovered;
     // A BEGIN recovery restores every staged file, so the same explicitly
     // approved transaction can now continue once. A staged manifest with no
@@ -499,6 +518,7 @@ int apply_update_transaction(const LaunchRequest& request, FILE* log) {
         char installed_sha[65]{};
         if (hash_file(installed_manifest, installed_sha) &&
             std::strcmp(installed_sha, loaded.sha256) == 0 && target_files_match(loaded)) {
+            announce(notifier, notifier_context, UpdateTransactionStage::finishing, request.rom);
             const bool cleaned = remove_tree(backup_parent) && remove_tree(stage_parent) &&
                                  unlink_durable(manifest_path);
             result(cleaned ? "installed" : "cleanup-pending", request.rom,
@@ -507,6 +527,6 @@ int apply_update_transaction(const LaunchRequest& request, FILE* log) {
             return cleaned ? 0 : 1;
         }
     }
-    return apply(request, loaded, log);
+    return apply(request, loaded, log, notifier, notifier_context);
 }
 } // namespace shelf

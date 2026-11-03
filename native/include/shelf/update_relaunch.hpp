@@ -8,6 +8,13 @@ namespace shelf {
 // Swordpdf's PS5SX2 relaunch work, adapted to isShelf's stricter handoff.
 inline constexpr unsigned update_relaunch_rounds = 2;
 inline constexpr unsigned update_relaunch_attempts_per_round = 5;
+// ShadowMount can still classify an immediate same-title start as the closing
+// app's handoff. PS5SX2's console-tested relaunch path therefore enforces a
+// minimum post-exit interval before its first LaunchApp call. Shelf already
+// observes a full second of stable Home before committing the update; this
+// additional settle keeps the first launch beyond that handoff window without
+// making a speculative launch attempt.
+inline constexpr unsigned update_relaunch_settle_ms = 1600;
 inline constexpr unsigned update_relaunch_retry_ms = 800;
 inline constexpr unsigned update_relaunch_observe_ms = 8000;
 inline constexpr unsigned update_relaunch_poll_ms = 100;
@@ -50,6 +57,33 @@ inline UpdateRelaunchOutcome relaunch_updated_shelf(const UpdateRelaunchOps& ops
     UpdateRelaunchOutcome outcome;
     if (!ops.state || !ops.launch || !ops.wait)
         return outcome;
+    auto state = ops.state(ops.context);
+    if (state == UpdateRelaunchState::target) {
+        outcome.result = UpdateRelaunchResult::launched;
+        return outcome;
+    }
+    if (state == UpdateRelaunchState::other_app) {
+        outcome.result = UpdateRelaunchResult::foreground_changed;
+        return outcome;
+    }
+    if (state != UpdateRelaunchState::idle) {
+        outcome.result = UpdateRelaunchResult::service_unavailable;
+        return outcome;
+    }
+    ops.wait(ops.context, update_relaunch_settle_ms);
+    state = ops.state(ops.context);
+    if (state == UpdateRelaunchState::target) {
+        outcome.result = UpdateRelaunchResult::launched;
+        return outcome;
+    }
+    if (state == UpdateRelaunchState::other_app) {
+        outcome.result = UpdateRelaunchResult::foreground_changed;
+        return outcome;
+    }
+    if (state != UpdateRelaunchState::idle) {
+        outcome.result = UpdateRelaunchResult::service_unavailable;
+        return outcome;
+    }
     bool accepted_once = false;
     for (unsigned round = 0; round < update_relaunch_rounds; ++round) {
         bool accepted = false;

@@ -57,11 +57,14 @@ int main() {
         fixture.states = {shelf::UpdateRelaunchState::idle,
                           shelf::UpdateRelaunchState::idle,
                           shelf::UpdateRelaunchState::idle,
+                          shelf::UpdateRelaunchState::idle,
+                          shelf::UpdateRelaunchState::idle,
                           shelf::UpdateRelaunchState::target};
         const auto outcome = run(fixture);
         assert(outcome.result == shelf::UpdateRelaunchResult::launched);
         assert(outcome.attempts == 3 && outcome.last_code == 17);
-        assert(fixture.waited == shelf::update_relaunch_retry_ms * 2);
+        assert(fixture.waited == shelf::update_relaunch_settle_ms +
+                                 shelf::update_relaunch_retry_ms * 2);
     }
     {
         Fixture fixture{{shelf::UpdateRelaunchState::other_app}, {0}};
@@ -71,6 +74,16 @@ int main() {
     }
     {
         Fixture fixture{{shelf::UpdateRelaunchState::idle,
+                         shelf::UpdateRelaunchState::other_app}, {0}};
+        const auto outcome = run(fixture);
+        assert(outcome.result == shelf::UpdateRelaunchResult::foreground_changed);
+        assert(outcome.attempts == 0);
+        assert(fixture.waited == shelf::update_relaunch_settle_ms);
+    }
+    {
+        Fixture fixture{{shelf::UpdateRelaunchState::idle,
+                         shelf::UpdateRelaunchState::idle,
+                         shelf::UpdateRelaunchState::idle,
                          shelf::UpdateRelaunchState::other_app}, {0}};
         const auto outcome = run(fixture);
         assert(outcome.result == shelf::UpdateRelaunchResult::foreground_changed);
@@ -90,11 +103,14 @@ int main() {
         const auto outcome = run(fixture);
         assert(outcome.result == shelf::UpdateRelaunchResult::not_observed);
         assert(outcome.attempts == shelf::update_relaunch_rounds);
-        assert(fixture.waited == shelf::update_relaunch_rounds *
-                                 shelf::update_relaunch_observe_ms);
+        assert(fixture.waited == shelf::update_relaunch_settle_ms +
+                                 shelf::update_relaunch_rounds *
+                                     shelf::update_relaunch_observe_ms);
     }
     {
         Fixture fixture{{shelf::UpdateRelaunchState::idle,
+                         shelf::UpdateRelaunchState::idle,
+                         shelf::UpdateRelaunchState::idle,
                          shelf::UpdateRelaunchState::target},
                         {static_cast<int>(shelf::update_relaunch_already_running)}};
         const auto outcome = run(fixture);

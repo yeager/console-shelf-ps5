@@ -34,37 +34,94 @@
 
 extern "C" {
 int sceUserServiceInitialize(void*);
-int sceUserServiceGetForegroundUser(std::uint32_t*);
+int sceUserServiceGetForegroundUser(std::int32_t*);
 int sceSystemServiceGetAppIdOfRunningBigApp();
 int sceSystemServiceGetAppTitleId(int, char*);
 int sceLncUtilInitialize();
 int sceLncUtilKillApp(int);
 struct AppLaunchContext {
     std::uint32_t size;
-    std::uint32_t user;
+    std::int32_t user;
     std::uint32_t options;
     std::uint64_t crash_report;
-    std::uint32_t check_flags;
+    std::uint64_t check_flags;
 };
 int sceSystemServiceLaunchApp(const char*, const char**, AppLaunchContext*);
 int sceLncUtilLaunchApp(const char*, const char**, AppLaunchContext*);
 int sceKernelOpenEventFlag(std::intptr_t*, const char*);
 int sceKernelPollEventFlag(std::intptr_t, std::uint64_t, unsigned, std::uint64_t*);
 int sceKernelCloseEventFlag(std::intptr_t);
+int sceKernelSendNotificationRequest(std::int32_t, void*, std::size_t, std::int32_t);
 }
-static_assert(sizeof(AppLaunchContext) == 32 && offsetof(AppLaunchContext, check_flags) == 24, "Unexpected launch ABI");
+static_assert(sizeof(AppLaunchContext) == 32 && offsetof(AppLaunchContext, user) == 4 &&
+              offsetof(AppLaunchContext, check_flags) == 24, "Unexpected launch ABI");
 namespace {
 constexpr char exact_origin_close_marker[] =
     "ISSHELF_EXACT_ORIGIN_CLOSE_V1";
 constexpr char exact_update_relaunch_marker[] =
-    "ISSHELF_EXACT_UPDATE_RELAUNCH_V1";
+    "ISSHELF_EXACT_UPDATE_RELAUNCH_V2";
+[[gnu::used]] constexpr char update_debug_notice_marker[] =
+    "ISSHELF_UPDATE_DEBUG_NOTICES_V1";
 constexpr char request_path[] = "/data/console-shelf/launch-request.txt";
 constexpr char status_path[] = "/data/console-shelf/launch-status.txt";
 constexpr char status_temporary[] = "/data/console-shelf/launch-status.tmp";
+struct DebugNotification {
+    std::int32_t type;
+    std::int32_t request_id;
+    std::int32_t priority;
+    std::int32_t message_id;
+    std::int32_t target_id;
+    std::int32_t user_id;
+    std::int32_t reserved_a;
+    std::int32_t reserved_b;
+    std::int32_t app_id;
+    std::int32_t error_number;
+    std::int32_t reserved_c;
+    char use_icon_uri;
+    char message[1024];
+    char uri[1024];
+    char reserved_text[1024];
+    char padding[3];
+};
+static_assert(sizeof(DebugNotification) == 0xc30 &&
+              offsetof(DebugNotification, message) == 0x2d,
+              "Unexpected PS5 debug notification ABI");
+
+void debug_notice(const char* text) {
+    static DebugNotification notification{};
+    std::memset(&notification, 0, sizeof(notification));
+    notification.target_id = -1;
+    std::snprintf(notification.message, sizeof(notification.message), "%s", text ? text : "");
+    (void)sceKernelSendNotificationRequest(0, &notification, sizeof(notification), 0);
+}
+
+void update_stage_notice(void*, shelf::UpdateTransactionStage stage, const char* tag) {
+    char message[256];
+    const char* version = tag && tag[0] ? tag : "the selected version";
+    switch (stage) {
+    case shelf::UpdateTransactionStage::verifying:
+        std::snprintf(message, sizeof(message), "isShelf update: verifying staged files...");
+        break;
+    case shelf::UpdateTransactionStage::recovering:
+        std::snprintf(message, sizeof(message), "isShelf update: resuming the interrupted transaction...");
+        break;
+    case shelf::UpdateTransactionStage::installing:
+        std::snprintf(message, sizeof(message), "Installing isShelf %s...", version);
+        break;
+    case shelf::UpdateTransactionStage::restoring:
+        std::snprintf(message, sizeof(message), "isShelf update: restoring the previous program files...");
+        break;
+    case shelf::UpdateTransactionStage::finishing:
+        std::snprintf(message, sizeof(message), "Finishing isShelf %s installation...", version);
+        break;
+    }
+    debug_notice(message);
+}
+
 struct Context {
     const shelf::LaunchRequest* request = nullptr;
     int origin_app = 0, target_app = 0;
-    std::uint32_t user = 0;
+    std::int32_t user = -1;
     int launch_status = 0;
     int probe_status = 0;
     int update_relaunch_observation = -2;
@@ -249,14 +306,23 @@ int launch_update_target(void* raw) {
     auto& context = *static_cast<Context*>(raw);
     AppLaunchContext params{};
     params.size = sizeof(params);
-    params.user = context.user;
-    const int result = sceLncUtilLaunchApp(shelf::shelf_title_id, nullptr, &params);
+    std::int32_t user = -1;
+    const int user_status = sceUserServiceGetForegroundUser(&user);
+    int result = user_status;
+    if (user_status == 0 && user >= 0 && user == context.user) {
+        params.user = user;
+        result = sceLncUtilLaunchApp(shelf::shelf_title_id, nullptr, &params);
+    } else if (user_status == 0) {
+        result = -EPERM;
+    }
     ++context.update_relaunch_attempts;
     if (context.journal) {
         std::fprintf(context.journal,
-                     "isShelf update relaunch attempt %u: sceLncUtilLaunchApp(%s)=0x%08x\n",
+                     "isShelf update relaunch attempt %u: sceLncUtilLaunchApp(%s, user %d)="
+                     "0x%08x user_query=0x%08x settle_ms=%u\n",
                      context.update_relaunch_attempts, shelf::shelf_title_id,
-                     static_cast<unsigned>(result));
+                     user, static_cast<unsigned>(result), static_cast<unsigned>(user_status),
+                     shelf::update_relaunch_settle_ms);
         std::fflush(context.journal);
     }
     return result;
@@ -754,7 +820,7 @@ int maintain_tiles(Context& context, const shelf::LaunchRequest& request) {
 }
 int launch(void* raw, const shelf::LaunchRequest& request) {
     auto& context = *static_cast<Context*>(raw);
-    std::uint32_t user = 0;
+    std::int32_t user = -1;
     if (sceUserServiceGetForegroundUser(&user) != 0 || user != context.user ||
         !shelf::launch_request_valid(request, now(nullptr)) || consent(raw) != shelf::HandoffConsent::committed)
         return context.launch_status = -1;
@@ -803,19 +869,33 @@ int launch(void* raw, const shelf::LaunchRequest& request) {
         return context.launch_status = maintain_tiles(context, request);
     if (request.mode == shelf::LaunchMode::self_update ||
         request.mode == shelf::LaunchMode::update_recover) {
-        const int transaction = shelf::apply_update_transaction(request, context.journal);
+        if (context.journal) {
+            std::fprintf(context.journal, "isShelf update notifications: marker=%s\n",
+                         update_debug_notice_marker);
+            std::fflush(context.journal);
+        }
+        const int transaction = shelf::apply_update_transaction(
+            request, context.journal, update_stage_notice, nullptr);
         shelf::UpdateRelaunchOutcome reopened;
         if (transaction >= 0) {
+            char message[160];
+            std::snprintf(message, sizeof(message),
+                          "isShelf %s installed. Opening isShelf...", request.rom);
+            debug_notice(message);
             reopened = shelf::relaunch_updated_shelf(
                 {&context, update_relaunch_state, launch_update_target, wait});
+            if (reopened.result != shelf::UpdateRelaunchResult::launched)
+                debug_notice("isShelf was updated but could not reopen automatically. Start it from PS5 Home.");
+        } else {
+            debug_notice("isShelf update stopped safely. Open isShelf again for details.");
         }
         if (context.journal) {
             std::fprintf(context.journal,
                          "isShelf update: transaction=0x%08x relaunch_result=%d relaunch_code=0x%08x "
-                         "attempts=%u marker=%s\n",
+                         "attempts=%u settle_ms=%u marker=%s\n",
                          static_cast<unsigned>(transaction), static_cast<int>(reopened.result),
                          static_cast<unsigned>(reopened.last_code), reopened.attempts,
-                         exact_update_relaunch_marker);
+                         shelf::update_relaunch_settle_ms, exact_update_relaunch_marker);
             std::fflush(context.journal);
         }
         if (transaction < 0)
@@ -839,8 +919,9 @@ int launch(void* raw, const shelf::LaunchRequest& request) {
     params.check_flags = 2;
     context.launch_status = sceSystemServiceLaunchApp(request.title, args[0] ? args.data() : nullptr, &params);
     if (context.journal) {
-        std::fprintf(context.journal, "SystemService launch: 0x%08x; check_flags: 0x%08x\n",
-                     static_cast<unsigned>(context.launch_status), params.check_flags);
+        std::fprintf(context.journal, "SystemService launch: 0x%08x; check_flags: 0x%016llx\n",
+                     static_cast<unsigned>(context.launch_status),
+                     static_cast<unsigned long long>(params.check_flags));
         std::fflush(context.journal);
     }
     return context.launch_status;
@@ -848,7 +929,7 @@ int launch(void* raw, const shelf::LaunchRequest& request) {
 int focused(void* raw, const shelf::LaunchRequest& request) {
     auto& context = *static_cast<Context*>(raw);
     char title[10]{};
-    std::uint32_t user = 0;
+    std::int32_t user = -1;
     if (!context.target_app || current(raw, title) != 1 || std::strcmp(title, request.title) != 0 ||
         sceUserServiceGetForegroundUser(&user) != 0 || user != context.user ||
         !shelf::launch_request_valid(request, now(nullptr)) || consent(raw) != shelf::HandoffConsent::committed)
@@ -935,7 +1016,7 @@ int main() {
                      static_cast<unsigned>(user_status));
         std::fflush(context.journal);
     }
-    if (initialized < 0 || user_status != 0 || context.user > 0x7fffffffu) {
+    if (initialized < 0 || user_status != 0 || context.user < 0) {
         status(request, shelf::LaunchStage::service_unavailable, user_status ? user_status : initialized);
         return 1;
     }

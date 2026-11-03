@@ -26,10 +26,10 @@ int sceSystemServiceGetAppTitleId(int, char*);
 int sceLncUtilInitialize();
 struct AppLaunchContext {
     std::uint32_t size;
-    std::uint32_t user;
+    std::int32_t user;
     std::uint32_t options;
     std::uint64_t crash_report;
-    std::uint32_t check_flags;
+    std::uint64_t check_flags;
 };
 int sceSystemServiceLaunchApp(const char*, const char**, AppLaunchContext*);
 }
