@@ -25,6 +25,7 @@ constexpr std::array<const char*, 5> filter_names = {"all", "emulators", "games"
 constexpr std::array<const char*, 4> icon_names = {"gaming", "classic", "jade", "vector"};
 constexpr std::array<const char*, 8> tv_names = {"console", "intro", "picture", "clock", "message", "favorites", "off", "video"};
 constexpr std::array<const char*, 4> noise_names = {"off", "emulator", "games", "either"};
+constexpr std::array<const char*, 2> language_names = {"en", "sv"};
 bool valid_text(const char* text, std::size_t capacity) {
     if (!std::memchr(text, 0, capacity)) return false;
     for (const unsigned char* at = reinterpret_cast<const unsigned char*>(text); *at; ++at)
@@ -101,6 +102,7 @@ bool valid(const Settings& settings) {
         static_cast<unsigned>(p.grid_look) >= look_names.size() ||
         static_cast<unsigned>(p.scope) >= scope_names.size() || static_cast<unsigned>(p.sort) >= sort_names.size() ||
         static_cast<unsigned>(p.filter) >= filter_names.size() || static_cast<unsigned>(p.icon) >= icon_names.size() ||
+        static_cast<unsigned>(p.language) >= language_names.size() ||
         p.brand >= brands.size() || static_cast<unsigned>(p.tv_mode) >= tv_names.size() ||
         p.tv_period >= tv_periods.size() || static_cast<unsigned>(p.tv_noise) >= noise_names.size() ||
         !valid_text(settings.tv_text, sizeof(settings.tv_text)))
@@ -140,7 +142,7 @@ bool read_file(const char* path, Settings& output) {
     std::rewind(file);
     Settings parsed;
     constexpr std::size_t room_keys = 11 + system_count * 4;
-    std::array<bool, room_keys + 5 + 64> seen{};
+    std::array<bool, room_keys + 6 + 64> seen{};
     std::array<bool, system_count> shortcut_route_seen{};
     char line[256];
     std::size_t bytes = 0;
@@ -233,6 +235,13 @@ bool read_file(const char* path, Settings& output) {
                 }
             if (!found)
                 okay = false;
+        } else if (std::strcmp(line, "language") == 0) {
+            key = static_cast<int>(room_keys + 69); // Optional in existing schema-1 settings.
+            const int n = choice(value, language_names);
+            if (n < 0)
+                okay = false;
+            else
+                parsed.preferences.language = static_cast<Language>(n);
         } else if (std::strcmp(line, "tv_mode") == 0) {
             key = static_cast<int>(room_keys);
             const int n = choice(value, tv_names);
@@ -406,11 +415,12 @@ bool save_settings(const char* path, const Settings& settings) {
     bool okay = std::fprintf(
                     file,
                     "# isShelf settings; schema 1; console keys use stable "
-                    "IDs\nversion=1\nlayout=%s\nlook=%s\nscope=%s\nsort=%s\nfilter=%s\nicon=%s\nbrand=%.*s\n",
+                    "IDs\nversion=1\nlayout=%s\nlook=%s\nscope=%s\nsort=%s\nfilter=%s\nicon=%s\nbrand=%.*s\nlanguage=%s\n",
                     layout_names[static_cast<std::size_t>(p.layout)], look_names[static_cast<std::size_t>(p.grid_look)],
                     scope_names[static_cast<std::size_t>(p.scope)], sort_names[static_cast<std::size_t>(p.sort)],
                     filter_names[static_cast<std::size_t>(p.filter)], icon_names[static_cast<std::size_t>(p.icon)],
-                    static_cast<int>(brands[p.brand].size()), brands[p.brand].data()) > 0;
+                    static_cast<int>(brands[p.brand].size()), brands[p.brand].data(),
+                    language_names[static_cast<std::size_t>(p.language)]) > 0;
     if (okay)
         okay = std::fprintf(file, "monochrome_missing=%d\nshelf_single=%d\nreduced_motion=%d\n",
                             p.monochrome_missing ? 1 : 0, p.shelf_single ? 1 : 0, p.reduced_motion ? 1 : 0) > 0;

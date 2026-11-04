@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "shelf/graphics.hpp"
+#include "shelf/localization.hpp"
 #include "shelf/console_tile_startup.hpp"
 #include "shelf/artwork.hpp"
 #include "shelf/game_case.hpp"
@@ -74,6 +75,7 @@ int noise_width = 0, noise_height = 0;
 std::size_t movie_selected = system_count;
 bool movie_demo = false;
 bool movie_bundled = false;
+Language display_language = Language::english;
 void stop_movie() {
     tv_movie.close();
     if (movie_texture) SDL_DestroyTexture(movie_texture);
@@ -310,8 +312,17 @@ void text(std::string_view value, int x, int y, int size, SDL_Color tint = white
         cursor += g.xadvance;
     }
 }
+int ui_text_width(std::string_view source, int size, bool bold = false) {
+    return text_width(localize(display_language, source), size, bold);
+}
+void ui_text(std::string_view source, int x, int y, int size, SDL_Color tint = white, bool bold = false, int limit = 1800) {
+    text(localize(display_language, source), x, y, size, tint, bold, limit);
+}
 void centered(std::string_view value, int x, int y, int size, SDL_Color tint = white, bool bold = false) {
     text(value, x - text_width(value, size, bold) / 2, y, size, tint, bold);
+}
+void ui_centered(std::string_view source, int x, int y, int size, SDL_Color tint = white, bool bold = false) {
+    ui_text(source, x - ui_text_width(source, size, bold) / 2, y, size, tint, bold);
 }
 Art* image(std::string_view name, bool monochrome = false) {
     ++art_age;
@@ -756,8 +767,8 @@ void switch_control(int x, int y, bool on) {
 }
 void label(int x, int y, std::string_view heading, std::string_view value, bool selected, int w = 1032) {
     box(x, y, w, 86, selected);
-    text(heading, x + 22, y + 12, 21, muted);
-    text(value, x + 22, y + 39, 27, white, true, w - 80);
+    ui_text(heading, x + 22, y + 12, 21, muted);
+    ui_text(value, x + 22, y + 39, 27, white, true, w - 80);
     text("<  >", x + w - 94, y + 29, 24, selected ? purple : muted);
 }
 void footer(std::string_view hint, int text_x = 80) {
@@ -771,8 +782,8 @@ void splash(float opacity, unsigned time_ms, bool loading, float appearance = 1,
     const int rise = static_cast<int>(12 * (1 - appearance));
     const int side = static_cast<int>(116 * (.92f + .08f * appearance));
     picture(icon_files[static_cast<std::size_t>(icon)], 960 - side / 2, 347 + rise, side, side, ink);
-    centered("isShelf", 960, 505 + rise, 48, {241, 240, 251, ink}, true);
-    centered(loading ? "Finding your emulators and games" : "Your systems, together", 960, 578 + rise, 23,
+    ui_centered("isShelf", 960, 505 + rise, 48, {241, 240, 251, ink}, true);
+    ui_centered(loading ? "Finding your emulators and games" : "Your systems, together", 960, 578 + rise, 23,
              {180, 174, 205, ink});
     if (loading) {
         for (unsigned dot = 0; dot < 3; ++dot) {
@@ -781,7 +792,7 @@ void splash(float opacity, unsigned time_ms, bool loading, float appearance = 1,
                     {194, 177, 255, static_cast<Uint8>(ink / (distance + 1))});
         }
         char hint[80];
-        std::snprintf(hint, sizeof(hint), "Hold Circle for %u seconds to close", close_hold_ms / 1000);
+        std::snprintf(hint, sizeof(hint), localize(display_language, "Hold Circle for %u seconds to close").data(), close_hold_ms / 1000);
         centered(hint, 960, 984, 19, {140, 140, 165, alpha});
     }
 }
@@ -1000,12 +1011,12 @@ void home(const UiState& state) {
     const bool room = p.layout == Layout::shelf;
     const int header_x = room ? 188 : 80;
     if (room) room_wall_panel();
-    text("ONE HOME FOR YOUR SYSTEMS", header_x, 119, 19, room ? SDL_Color{176, 215, 190, 255} : purple, true);
+    ui_text("ONE HOME FOR YOUR SYSTEMS", header_x, 119, 19, room ? SDL_Color{176, 215, 190, 255} : purple, true);
     if (room)
-        text("Your console collection", header_x, 154, 50, white, true);
+        ui_text("Your console collection", header_x, 154, 50, white, true);
     else {
-        text("What do you want", 80, 153, 59, white, true);
-        text("to play today?", 80, 218, 59, purple, true);
+        ui_text("What do you want", 80, 153, 59, white, true);
+        ui_text("to play today?", 80, 218, 59, purple, true);
     }
     const int tool_y = room ? 244 : 314, summary_y = room ? 316 : 391;
     if (room) room_control(header_x, tool_y, 760, 66, state.tools && state.tool == 0);
@@ -1025,10 +1036,10 @@ void home(const UiState& state) {
     text(summary, room ? 192 : 84, summary_y, 20, room ? SDL_Color{190, 205, 196, 255} : muted);
     if (!shown.count) {
         if (state.library_discovering) {
-            centered("Finding your emulators and games", 960, 620, 42, white, true);
+            ui_centered("Finding your emulators and games", 960, 620, 42, white, true);
             centered("Your systems will appear here as soon as discovery finishes.", 960, 679, 26, muted);
         } else {
-            centered("Your shelf is ready for your choices", 960, 620, 42, white, true);
+            ui_centered("Your shelf is ready for your choices", 960, 620, 42, white, true);
             centered(p.layout == Layout::shelf && p.shelf_single ? "Choose up to 8 consoles in Settings > Consoles." :
                      p.scope == Scope::favorites ? "Add favourites with Triangle, or change the view in Settings." :
                      "Choose All consoles or enable systems in settings.", 960, 679, 26, muted);
@@ -1545,12 +1556,12 @@ void settings(const UiState& state) {
     box(panel_x, 76, panel_width, 900, false, {20, 23, 41, 255});
     picture(icon_files[static_cast<std::size_t>(state.settings.preferences.icon)],
             panel_x + panel_width - 124, 126, 76, 76);
-    text("MAKE IT YOURS", content_x, 108, 19, purple, true);
-    text("isShelf settings", content_x, 139, 43, white, true);
-    text("Changes save automatically", content_x + 2, 199, 22, muted);
+    ui_text("MAKE IT YOURS", content_x, 108, 19, purple, true);
+    ui_text("isShelf settings", content_x, 139, 43, white, true);
+    ui_text("Changes save automatically", content_x + 2, 199, 22, muted);
     const std::array<std::string_view, 4> tabs = {"Appearance", "Sort & filter", "Consoles", "Play room"};
     for (int i = 0; i < 4; ++i) {
-        text(tabs[static_cast<std::size_t>(i)], content_x + i * 228, 250, 25,
+        ui_text(tabs[static_cast<std::size_t>(i)], content_x + i * 228, 250, 25,
              static_cast<int>(state.tab) == i ? purple : muted, true);
         if (static_cast<int>(state.tab) == i)
             rounded(content_x + i * 228, 292, 190, 3, 1, purple);
@@ -1558,23 +1569,23 @@ void settings(const UiState& state) {
     line(panel_x, 304, panel_x + panel_width, 304, {49, 55, 78, 255});
     const auto& p = state.settings.preferences;
     if (state.tab == SettingsTab::appearance) {
-        text("Your shelf, your style", content_x, 338, 34, white, true);
-        text("Choose Grid, curved Swipe, or a lit display Shelf.", content_x, 388, 24, muted);
-        setting_label(429, "Layout", layout_labels[static_cast<std::size_t>(p.layout)], state.settings_focus == 0);
-        setting_label(519, "Grid look", p.layout != Layout::grid ? "Available in Grid layout" :
-              p.grid_look == GridLook::icons ? "3D console icons" : "Classic cards",
+        ui_text("Your shelf, your style", content_x, 338, 34, white, true);
+        ui_text("Choose Grid, curved Swipe, or a lit display Shelf.", content_x, 388, 24, muted);
+        setting_label(429, "Layout", localize(display_language, layout_labels[static_cast<std::size_t>(p.layout)]), state.settings_focus == 0);
+        setting_label(519, "Grid look", localize(display_language, p.layout != Layout::grid ? "Available in Grid layout" :
+              p.grid_look == GridLook::icons ? "3D console icons" : "Classic cards"),
               state.settings_focus == 1);
-        setting_label(609, "isShelf logo", icon_names[static_cast<std::size_t>(p.icon)], state.settings_focus == 2);
-        setting_label(699, "Missing emulator artwork", p.monochrome_missing ? "Black & white" : "Full colour",
+        setting_label(609, "isShelf logo", localize(display_language, icon_names[static_cast<std::size_t>(p.icon)]), state.settings_focus == 2);
+        setting_label(699, "Missing emulator artwork", localize(display_language, p.monochrome_missing ? "Black & white" : "Full colour"),
               state.settings_focus == 3);
-        setting_label(789, "Motion", p.reduced_motion ? "Reduced: instant page changes" : "Smooth console transitions",
+        setting_label(789, "Motion", localize(display_language, p.reduced_motion ? "Reduced: instant page changes" : "Smooth console transitions"),
               state.settings_focus == 4);
     } else if (state.tab == SettingsTab::browse) {
-        text("Find your next favourite", content_x, 338, 34, white, true);
-        text("Choose an order and narrow down your collection.", content_x, 388, 24, muted);
-        setting_label(435, "Sort by", sorts[static_cast<std::size_t>(p.sort)], state.settings_focus == 0);
-        setting_label(539, "Brand", p.brand ? brands[p.brand] : "All brands", state.settings_focus == 1);
-        setting_label(643, "Availability", filters[static_cast<std::size_t>(p.filter)], state.settings_focus == 2);
+        ui_text("Find your next favourite", content_x, 338, 34, white, true);
+        ui_text("Choose an order and narrow down your collection.", content_x, 388, 24, muted);
+        setting_label(435, "Sort by", localize(display_language, sorts[static_cast<std::size_t>(p.sort)]), state.settings_focus == 0);
+        setting_label(539, "Brand", p.brand ? brands[p.brand] : localize(display_language, "All brands"), state.settings_focus == 1);
+        setting_label(643, "Availability", localize(display_language, filters[static_cast<std::size_t>(p.filter)]), state.settings_focus == 2);
         setting_label(747, "Shelf pages", p.shelf_single ? "One curated shelf: choose up to 8 consoles" :
               "Browse collection: 8 consoles per page", state.settings_focus == 3);
         text(p.shelf_single ? "Choose your 8 in Consoles. Grid and Swipe keep your full collection." :
@@ -1791,6 +1802,7 @@ bool graphics_init(SDL_Renderer* target, const char* asset_root, const char* dat
 }
 void graphics_render(const UiState& state, unsigned time_ms, bool animate) {
     render_time = time_ms;
+    display_language = state.settings.preferences.language;
     if (state.presentation.artwork) {
         SDL_SetRenderDrawColor(renderer, 11, 13, 28, 255);
         SDL_RenderClear(renderer);

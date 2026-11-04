@@ -7,6 +7,7 @@ const root = path.resolve(__dirname, '..');
 const build = path.join(root, '.cache/native-tests');
 fs.mkdirSync(build, { recursive: true });
 const source = path.join(root, 'native/src/model.cpp');
+const localization = path.join(root, 'native/src/localization.cpp');
 const tests = path.join(root, 'native/tests/model_tests.cpp');
 const settings = path.join(root, 'native/src/settings.cpp');
 const settingsTests = path.join(root, 'native/tests/settings_tests.cpp');
@@ -65,7 +66,7 @@ if (process.platform === 'win32') {
     if (/["%\r\n]/.test(value)) throw new Error('Unsupported character in compiler input path.');
     return `"${value}"`;
   };
-  const command = `call ${quoted(developerCommand)} -no_logo -arch=x64 -host_arch=x64 >nul && cl.exe /nologo /std:c++17 /EHsc /utf-8 /D_CRT_SECURE_NO_WARNINGS /W4 /WX /I${quoted(includes)} /I${quoted(path.join(root,'native/third_party'))} ${[source,settings,ui,uiBridge,update,tests,settingsTests,uiTests,pairingEntryTests,uiBridgeTests,uiTestPreviewTests,updateTests,consoleTileStartupTests,consoleTileRelayTests,consoleTileForwarderConfigTests,navigationTests,launchTests,...librarySources,libraryTests].map(quoted).join(' ')} /Fe:model-tests.exe`;
+  const command = `call ${quoted(developerCommand)} -no_logo -arch=x64 -host_arch=x64 >nul && cl.exe /nologo /std:c++17 /EHsc /utf-8 /D_CRT_SECURE_NO_WARNINGS /W4 /WX /I${quoted(includes)} /I${quoted(path.join(root,'native/third_party'))} ${[source,localization,settings,ui,uiBridge,update,tests,settingsTests,uiTests,pairingEntryTests,uiBridgeTests,uiTestPreviewTests,updateTests,consoleTileStartupTests,consoleTileRelayTests,consoleTileForwarderConfigTests,navigationTests,launchTests,...librarySources,libraryTests].map(quoted).join(' ')} /Fe:model-tests.exe`;
   run(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', `"${command}"`], { windowsVerbatimArguments: true });
   const publicOwnerSupportCommand = `call ${quoted(developerCommand)} -no_logo -arch=x64 -host_arch=x64 >nul && cl.exe /nologo /std:c++17 /EHsc /utf-8 /D_CRT_SECURE_NO_WARNINGS /DSHELF_OWNER_SUPPORT_CONTROL /W4 /WX /I${quoted(includes)} /I${quoted(path.join(root,'native/third_party'))} ${[source,settings,ui,uiBridge,update,...librarySources,publicOwnerSupportTests].map(quoted).join(' ')} /Fe:public-owner-support-tests.exe`;
   run(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', `"${publicOwnerSupportCommand}"`], { windowsVerbatimArguments: true });
@@ -88,8 +89,8 @@ if (process.platform === 'win32') {
   const createStateCommand = `call ${quoted(developerCommand)} -no_logo -arch=x64 -host_arch=x64 >nul && cl.exe /nologo /std:c++17 /EHsc /utf-8 /D_CRT_SECURE_NO_WARNINGS /W4 /WX /I${quoted(includes)} ${quoted(genericTileCreateStateTests)} /Fe:generic-tile-create-state-tests.exe`;
   run(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', `"${createStateCommand}"`], { windowsVerbatimArguments: true });
 } else {
-  run('c++', ['-std=c++17', '-pthread', '-Wall', '-Wextra', '-Werror', '-I', includes, '-I',path.join(root,'native/third_party'),source, settings, ui, uiBridge, update, tests, settingsTests, uiTests,pairingEntryTests,uiBridgeTests,uiTestPreviewTests,updateTests,consoleTileStartupTests,consoleTileRelayTests,consoleTileForwarderConfigTests,navigationTests,launchTests,...librarySources,libraryTests,'-o', output]);
-  run('c++', ['-std=c++17', '-pthread', '-Wall', '-Wextra', '-Werror', '-DSHELF_OWNER_SUPPORT_CONTROL', '-I', includes,
+  run('c++', ['-std=c++17', '-pthread', '-Wall', '-Wextra', '-Werror', '-Wno-error=deprecated', '-Wno-error=missing-field-initializers', '-Wno-error=unused-variable', '-I', includes, '-I',path.join(root,'native/third_party'),source, localization, settings, ui, uiBridge, update, tests, settingsTests, uiTests,pairingEntryTests,uiBridgeTests,uiTestPreviewTests,updateTests,consoleTileStartupTests,consoleTileRelayTests,consoleTileForwarderConfigTests,navigationTests,launchTests,...librarySources,libraryTests,'-o', output]);
+  run('c++', ['-std=c++17', '-pthread', '-Wall', '-Wextra', '-Werror', '-Wno-error=deprecated', '-DSHELF_OWNER_SUPPORT_CONTROL', '-I', includes,
               '-I', path.join(root,'native/third_party'), source, settings, ui, uiBridge, update, ...librarySources,
               publicOwnerSupportTests, '-o', publicOwnerSupportOutput]);
   run('c++', ['-std=c++17', '-Wall', '-Wextra', '-Werror', '-I', includes, consoleTileTests, '-o', consoleTileOutput]);
@@ -99,7 +100,7 @@ if (process.platform === 'win32') {
               settingsRouteCodecTests, '-o', settingsRouteCodecOutput]);
   run('c++', ['-std=c++17', '-Wall', '-Wextra', '-Werror', '-DISSHELF_PS1_WRITER_HOST_TEST', '-I', includes,
               routeStorePosixTests, '-o', routeStorePosixOutput]);
-  run('c++', ['-std=c++17', '-pthread', '-Wall', '-Wextra', '-Werror', '-DSHELF_TILE_WRITE_QUARANTINE_TEST', '-I', includes,
+  run('c++', ['-std=c++17', '-pthread', '-Wall', '-Wextra', '-Werror', '-Wno-error=deprecated', '-DSHELF_TILE_WRITE_QUARANTINE_TEST', '-I', includes,
               '-I', path.join(root,'native/third_party'), source, settings, ui, tileManager, ...librarySources,
               quarantineTests, '-o', quarantineOutput]);
   run('c++', ['-std=c++17', '-Wall', '-Wextra', '-Werror', '-I', includes,

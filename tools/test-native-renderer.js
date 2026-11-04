@@ -29,6 +29,9 @@ const swedishSettings=fs.readFileSync(path.join(swedishData,'settings.ini'),'utf
 assert.match(swedishSettings,/^language=sv$/m,'test fixture must select Swedish');
 fs.writeFileSync(path.join(swedishData,'settings.ini'),swedishSettings);
 run('shot:swedish-home.png,settings,shot:swedish-appearance.png',swedishData);
+const digest=name=>crypto.createHash('sha256').update(fs.readFileSync(path.join(captures,name))).digest('hex');
+assert.notEqual(digest('home.png'),digest('swedish-home.png'),'Swedish UI visibly differs from the English UI');
+assert.notEqual(digest('appearance.png'),digest('swedish-appearance.png'),'Swedish settings visibly translate UI copy');
 const changed=JSON.parse(fs.readFileSync(path.join(captures,'changed.json')));
 assert.equal(changed.page,3);assert.equal(changed.tab,2);assert.equal(changed.layout,'swipe');
 assert.equal(changed.shown,36);assert.equal(changed.hidden.length,16);assert.ok(changed.hidden.includes('n64'));assert.ok(!changed.hidden.includes('ps2'));
@@ -106,7 +109,6 @@ run('report:missing-colour-reopened.json',colourData);
 assert.equal(JSON.parse(fs.readFileSync(path.join(captures,'missing-colour-reopened.json'))).monochromeMissing,false);
 run('settings,confirm,back,right,shot:orbit-start.png,frame:120,shot:orbit-middle.png,frame:400,shot:orbit-end.png',motionData,0,true);
 run('right,shot:orbit-reference.png',motionData);
-const digest=name=>crypto.createHash('sha256').update(fs.readFileSync(path.join(captures,name))).digest('hex');
 const roomData=path.join(directory,'room-data');fs.mkdirSync(roomData);
 run('layout,layout,settings,tab,tab,tab,shot:room-settings.png,confirm,back,frame:500,shot:room-intro.png,settings,confirm,back,shot:room-picture-fallback.png,settings,confirm,back,shot:room-clock.png,settings,confirm,down,confirm,favorite,text:MY PLAY ROOM,back,back,shot:room-message.png,settings,confirm,back,shot:room-favourites.png,settings,confirm,back,shot:room-screen-off.png,report:room.json',roomData,0,true);
 const roomReport=JSON.parse(fs.readFileSync(path.join(captures,'room.json')));
@@ -194,7 +196,7 @@ run('back,frame:250,shot:close-hint.png,report:close-hint.json,frame:2000,frame:
 assert.equal(JSON.parse(fs.readFileSync(path.join(captures,'close-hint.json'))).page,0,'a Circle tap keeps the home page');
 assert.notEqual(digest('close-hint.png'),digest('close-hint-fade.png'),'the compact hint fades away');
 assert.equal(digest('close-hint-gone.png'),digest('reveal-reference.png'),'the timed hint leaves no modal or overlay');
-const images=['home.png','details.png','appearance.png','browse.png','consoles.png','swipe.png','megadrive.png','display-shelf.png','display-shelf-page2.png','display-shelf-reopened.png','native-ps5-tile.png','native-ps5-global-action.png','orbit-start.png','orbit-middle.png','orbit-end.png','orbit-reference.png','loading.png','prepared-cover.png','loading-motion.png','reveal-start.png','reveal-middle.png','reveal-end.png','reveal-reference.png','hold-middle.png','hold-cancelled.png','close-start.png','close-middle.png','settings-focus.png','layout-focus.png','launch-art.png','close-hint.png','close-hint-fade.png','close-hint-gone.png'];
+const images=['home.png','details.png','appearance.png','browse.png','consoles.png','swipe.png','swedish-home.png','swedish-appearance.png','megadrive.png','display-shelf.png','display-shelf-page2.png','display-shelf-reopened.png','native-ps5-tile.png','native-ps5-global-action.png','orbit-start.png','orbit-middle.png','orbit-end.png','orbit-reference.png','loading.png','prepared-cover.png','loading-motion.png','reveal-start.png','reveal-middle.png','reveal-end.png','hold-middle.png','hold-cancelled.png','close-start.png','close-middle.png','settings-focus.png','layout-focus.png','launch-art.png','close-hint.png','close-hint-fade.png','close-hint-gone.png'];
 const launchData=path.join(directory,'launch-label-data'),libraryRoot=path.join(directory,'library-fixture');fs.mkdirSync(launchData);
 function fixture(name,raw){const output=path.join(libraryRoot,name);fs.mkdirSync(path.dirname(output),{recursive:true});fs.writeFileSync(output,raw);}
 for(const [id,name] of [['PPSA97510','PSXS5'],['PPSA99169','RetroArch']]){

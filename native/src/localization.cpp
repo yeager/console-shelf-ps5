@@ -46,6 +46,7 @@ constexpr Entry swedish[] = {
     {"isShelf settings", "isShelf-inställningar"}, {"Changes save automatically", "Ändringar sparas automatiskt"},
     {"Appearance", "Utseende"}, {"Sort & filter", "Sortering och filter"}, {"Consoles", "Konsoler"}, {"Play room", "Spelrum"},
     {"Your shelf, your style", "Din hylla, din stil"}, {"Choose Grid, curved Swipe, or a lit display Shelf.", "Välj Rutnät, den böjda vyn Svep eller den upplysta Hyllan."},
+    {"Layout", "Utformning"},
     {"Grid", "Rutnät"}, {"Swipe", "Svep"}, {"Shelf", "Hylla"}, {"Grid look", "Rutnätsutseende"},
     {"Available in Grid layout", "Tillgängligt i rutnätslayout"}, {"3D console icons", "3D-konsolikoner"}, {"Classic cards", "Klassiska kort"},
     {"isShelf logo", "isShelf-logotyp"}, {"Gaming", "Spel"}, {"Classic mint", "Klassisk mint"}, {"Vector (default)", "Vektor (standard)"},

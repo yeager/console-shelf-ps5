@@ -205,7 +205,7 @@ def build(standard_runtime=True, ui_test_bridge=False, owned_tile_writes=False):
         "rsa_alt_helpers.c", "sha1.c", "sha256.c", "sha512.c", "ssl_ciphersuites.c",
         "ssl_client.c", "ssl_msg.c", "ssl_tls.c", "ssl_tls12_client.c", "x509.c", "x509_crt.c",
     ]
-    sources = [ROOT / "native/src" / (name + ".cpp") for name in ("model", "settings", "ui", "graphics", "codecs", "movie", "library", "artwork_sources", "artwork", "filesystem", "metadata", "ftp", "launch_client", "update", "update_client", "console_tile_manager", "managed_tile_api_v1", "managed_tile_app_client", "host_main")]
+    sources = [ROOT / "native/src" / (name + ".cpp") for name in ("model", "localization", "settings", "ui", "graphics", "codecs", "movie", "library", "artwork_sources", "artwork", "filesystem", "metadata", "ftp", "launch_client", "update", "update_client", "console_tile_manager", "managed_tile_api_v1", "managed_tile_app_client", "host_main")]
     sources += [ROOT / "native/src/json.c"]
     sources += [ROOT / "native/third_party/ps5sx2_https/fe_https.cpp",
                 ROOT / "native/third_party/ps5sx2_https/ps5sx2_mbedtls_platform.c",
