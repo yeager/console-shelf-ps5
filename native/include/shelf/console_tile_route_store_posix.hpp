@@ -127,12 +127,23 @@ private:
                (named.st_mode & S_IFMT) == (held.st_mode & S_IFMT);
     }
     static bool same_file_snapshot(const struct stat& before, const struct stat& after) {
+#if defined(__APPLE__)
+        const auto before_mtime = before.st_mtimespec;
+        const auto after_mtime = after.st_mtimespec;
+        const auto before_ctime = before.st_ctimespec;
+        const auto after_ctime = after.st_ctimespec;
+#else
+        const auto before_mtime = before.st_mtim;
+        const auto after_mtime = after.st_mtim;
+        const auto before_ctime = before.st_ctim;
+        const auto after_ctime = after.st_ctim;
+#endif
         return same_identity(before, after) && before.st_size == after.st_size &&
                before.st_nlink == after.st_nlink &&
-               before.st_mtim.tv_sec == after.st_mtim.tv_sec &&
-               before.st_mtim.tv_nsec == after.st_mtim.tv_nsec &&
-               before.st_ctim.tv_sec == after.st_ctim.tv_sec &&
-               before.st_ctim.tv_nsec == after.st_ctim.tv_nsec &&
+               before_mtime.tv_sec == after_mtime.tv_sec &&
+               before_mtime.tv_nsec == after_mtime.tv_nsec &&
+               before_ctime.tv_sec == after_ctime.tv_sec &&
+               before_ctime.tv_nsec == after_ctime.tv_nsec &&
                (before.st_mode & 07777u) == (after.st_mode & 07777u);
     }
     bool parent_identity() const {
