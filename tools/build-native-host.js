@@ -24,6 +24,9 @@ if(process.platform==='win32'){
   fs.copyFileSync(path.join(sdl,'lib/x64/SDL2.dll'),path.join(build,'SDL2.dll'));
 }else{
   const flags=spawnSync('sdl2-config',['--cflags','--libs'],{encoding:'utf8'});if(flags.status!==0)throw new Error('An existing SDL2 development installation is required.');
-  run('c++',['-std=c++17','-O2','-Wall','-Wextra','-Werror','-Wno-error=deprecated','-Wno-error=missing-field-initializers','-Wno-error=unused-variable','-Wno-unused-function',...(quarantined?['-DSHELF_TILE_WRITE_QUARANTINE_TEST']:[]),...includes.flatMap(value=>['-I',value]),...sources,...flags.stdout.trim().split(/\s+/),'-o',quarantined?'shelf-host-quarantine':'shelf-host']);
+  // GCC 15 diagnoses bounded legacy paths as potentially truncated. Keep the
+  // warning visible while allowing the host renderer to build like supported
+  // GCC releases; runtime path validation remains covered by native tests.
+  run('c++',['-std=c++17','-O2','-Wall','-Wextra','-Werror','-Wno-error=deprecated','-Wno-error=missing-field-initializers','-Wno-error=unused-variable','-Wno-error=format-truncation','-Wno-unused-function',...(quarantined?['-DSHELF_TILE_WRITE_QUARANTINE_TEST']:[]),...includes.flatMap(value=>['-I',value]),...sources,...flags.stdout.trim().split(/\s+/),'-o',quarantined?'shelf-host-quarantine':'shelf-host']);
 }
 console.log(`Built ${quarantined?'quarantined ':''}native host renderer in .cache/native-host.`);

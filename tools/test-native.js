@@ -89,8 +89,8 @@ if (process.platform === 'win32') {
   const createStateCommand = `call ${quoted(developerCommand)} -no_logo -arch=x64 -host_arch=x64 >nul && cl.exe /nologo /std:c++17 /EHsc /utf-8 /D_CRT_SECURE_NO_WARNINGS /W4 /WX /I${quoted(includes)} ${quoted(genericTileCreateStateTests)} /Fe:generic-tile-create-state-tests.exe`;
   run(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', `"${createStateCommand}"`], { windowsVerbatimArguments: true });
 } else {
-  run('c++', ['-std=c++17', '-pthread', '-Wall', '-Wextra', '-Werror', '-Wno-error=deprecated', '-Wno-error=missing-field-initializers', '-Wno-error=unused-variable', '-I', includes, '-I',path.join(root,'native/third_party'),source, localization, settings, ui, uiBridge, update, tests, settingsTests, uiTests,pairingEntryTests,uiBridgeTests,uiTestPreviewTests,updateTests,consoleTileStartupTests,consoleTileRelayTests,consoleTileForwarderConfigTests,navigationTests,launchTests,...librarySources,libraryTests,'-o', output]);
-  run('c++', ['-std=c++17', '-pthread', '-Wall', '-Wextra', '-Werror', '-Wno-error=deprecated', '-DSHELF_OWNER_SUPPORT_CONTROL', '-I', includes,
+  run('c++', ['-std=c++17', '-pthread', '-Wall', '-Wextra', '-Werror', '-Wno-error=deprecated', '-Wno-error=missing-field-initializers', '-Wno-error=unused-variable', '-Wno-error=format-truncation', '-I', includes, '-I',path.join(root,'native/third_party'),source, localization, settings, ui, uiBridge, update, tests, settingsTests, uiTests,pairingEntryTests,uiBridgeTests,uiTestPreviewTests,updateTests,consoleTileStartupTests,consoleTileRelayTests,consoleTileForwarderConfigTests,navigationTests,launchTests,...librarySources,libraryTests,'-o', output]);
+  run('c++', ['-std=c++17', '-pthread', '-Wall', '-Wextra', '-Werror', '-Wno-error=deprecated', '-Wno-error=format-truncation', '-DSHELF_OWNER_SUPPORT_CONTROL', '-I', includes,
               '-I', path.join(root,'native/third_party'), source, settings, ui, uiBridge, update, ...librarySources,
               publicOwnerSupportTests, '-o', publicOwnerSupportOutput]);
   run('c++', ['-std=c++17', '-Wall', '-Wextra', '-Werror', '-I', includes, consoleTileTests, '-o', consoleTileOutput]);
@@ -100,7 +100,7 @@ if (process.platform === 'win32') {
               settingsRouteCodecTests, '-o', settingsRouteCodecOutput]);
   run('c++', ['-std=c++17', '-Wall', '-Wextra', '-Werror', '-DISSHELF_PS1_WRITER_HOST_TEST', '-I', includes,
               routeStorePosixTests, '-o', routeStorePosixOutput]);
-  run('c++', ['-std=c++17', '-pthread', '-Wall', '-Wextra', '-Werror', '-Wno-error=deprecated', '-DSHELF_TILE_WRITE_QUARANTINE_TEST', '-I', includes,
+  run('c++', ['-std=c++17', '-pthread', '-Wall', '-Wextra', '-Werror', '-Wno-error=deprecated', '-Wno-error=format-truncation', '-DSHELF_TILE_WRITE_QUARANTINE_TEST', '-I', includes,
               '-I', path.join(root,'native/third_party'), source, settings, ui, tileManager, ...librarySources,
               quarantineTests, '-o', quarantineOutput]);
   run('c++', ['-std=c++17', '-Wall', '-Wextra', '-Werror', '-I', includes,
