@@ -945,7 +945,7 @@ void room_tv(const UiState& state) {
         }
         if (p.tv_mode == TvMode::intro && !eligible) {
             picture(icon_files[static_cast<std::size_t>(p.icon)], x + w / 2 - 38, y + 75, 76, 76, 180);
-            centered("Your play room", x + w / 2, y + 174, 25, {205, 224, 221, 200}, true);
+            ui_centered("Your play room", x + w / 2, y + 174, 25, {205, 224, 221, 200}, true);
             pictured = true;
         }
     }
@@ -956,8 +956,8 @@ void room_tv(const UiState& state) {
             char counts[96]; std::snprintf(counts, sizeof(counts), "%zu games  /  %zu emulator routes",
                                          state.inventory[id].game_count, state.inventory[id].emulator_count);
             centered(counts, x + w / 2, y + h - 39, 17, {166, 202, 197, alpha});
-        } else centered(eligible ? "Add your own intro in Play room" : "Intro set to installed consoles only",
-                        x + w / 2, y + h - 39, 17, {166, 202, 197, alpha});
+        } else ui_centered(eligible ? "Add your own intro in Play room" : "Intro set to installed consoles only",
+                           x + w / 2, y + h - 39, 17, {166, 202, 197, alpha});
     } else if (!pictured && (p.tv_mode == TvMode::picture || p.tv_mode == TvMode::message)) {
         picture(icon_files[static_cast<std::size_t>(p.icon)], x + w / 2 - 31, y + 33, 62, 62, 210);
         tv_lines(state.settings.tv_text, x + 42, y + 129, w - 84, 31, {230, 248, 243, 230});
