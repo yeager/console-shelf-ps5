@@ -513,6 +513,11 @@ void test_ui() {
     input(display, Action::confirm);
     check(!display.settings.preferences.monochrome_missing && display.settings_focus == 3,
           "the fourth Appearance setting allows full-colour missing emulator icons");
+    input(display, Action::down);
+    input(display, Action::down);
+    input(display, Action::right);
+    check(display.settings_focus == 5 && display.settings.preferences.language == Language::swedish,
+          "the visible sixth Appearance setting changes the persisted UI language by controller");
     const auto center = orbit_pose(0, 1760), near = orbit_pose(1, 1760), far = orbit_pose(2, 1760);
     check(center.scale > near.scale && near.scale > far.scale && center.z > near.z && near.z > far.z,
           "carousel selection dominates a progressively receding collection");

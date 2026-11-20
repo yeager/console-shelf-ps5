@@ -765,15 +765,17 @@ void switch_control(int x, int y, bool on) {
     rounded(x, y, 58, 30, 15, on ? purple : SDL_Color{62, 72, 100, 255});
     rounded(x + (on ? 31 : 4), y + 4, 22, 22, 11, on ? SDL_Color{38, 28, 65, 255} : muted);
 }
-void label(int x, int y, std::string_view heading, std::string_view value, bool selected, int w = 1032) {
-    box(x, y, w, 86, selected);
+void label(int x, int y, std::string_view heading, std::string_view value, bool selected, int w = 1032, int h = 86) {
+    box(x, y, w, h, selected);
     ui_text(heading, x + 22, y + 12, 21, muted);
-    ui_text(value, x + 22, y + 39, 27, white, true, w - 80);
+    // Values can be user content (for example the Play room message), so only
+    // localize the UI label. Callers localize known choice values explicitly.
+    text(value, x + 22, y + 39, 27, white, true, w - 80);
     text("<  >", x + w - 94, y + 29, 24, selected ? purple : muted);
 }
 void footer(std::string_view hint, int text_x = 80) {
     rect(0, 1015, width, 65, {9, 12, 26, 245});
-    text(hint, text_x, 1032, 21, muted);
+    ui_text(hint, text_x, 1032, 21, muted);
 }
 void splash(float opacity, unsigned time_ms, bool loading, float appearance = 1, AppIcon icon = AppIcon::vector) {
     const auto alpha = static_cast<Uint8>(std::clamp(opacity, 0.0f, 1.0f) * 255);
@@ -1247,9 +1249,9 @@ void detail(const UiState& state) {
     const auto& route = state.settings.preferred_emulator[id];
     const auto* detected = state.library ? preferred_route(*state.library, id, route.data()) : nullptr;
     label(80, 515, "Preferred emulator",
-          state.inventory[id].built_in ? std::string_view("PS5 system")
+          state.inventory[id].built_in ? localize(display_language, "PS5 system")
           : detected                   ? std::string_view(detected->name)
-                                       : std::string_view("No emulator detected"),
+                                       : localize(display_language, "No emulator detected"),
           !state.tools && state.detail_focus == 0, 920);
     box(80, 631, 443, 82, !state.tools && state.detail_focus == 1);
     text("Open emulator library", 107, 652, 27,
@@ -1549,8 +1551,8 @@ void settings(const UiState& state) {
     // Keep the room's left light and TV visible around the settings surface.
     constexpr int panel_x = 164, panel_width = 1000;
     constexpr int content_x = 206, content_width = 916;
-    const auto setting_label = [&](int y, std::string_view heading, std::string_view value, bool selected) {
-        label(content_x, y, heading, value, selected, content_width);
+    const auto setting_label = [&](int y, std::string_view heading, std::string_view value, bool selected, int height = 86) {
+        label(content_x, y, heading, value, selected, content_width, height);
     };
     rect(0, 0, width, height, {4, 6, 16, 180});
     box(panel_x, 76, panel_width, 900, false, {20, 23, 41, 255});
@@ -1571,59 +1573,66 @@ void settings(const UiState& state) {
     if (state.tab == SettingsTab::appearance) {
         ui_text("Your shelf, your style", content_x, 338, 34, white, true);
         ui_text("Choose Grid, curved Swipe, or a lit display Shelf.", content_x, 388, 24, muted);
-        setting_label(429, "Layout", localize(display_language, layout_labels[static_cast<std::size_t>(p.layout)]), state.settings_focus == 0);
-        setting_label(519, "Grid look", localize(display_language, p.layout != Layout::grid ? "Available in Grid layout" :
+        // Six compact rows leave a clear gap above the persistent footer.
+        constexpr int row_height = 70;
+        setting_label(414, "Layout", localize(display_language, layout_labels[static_cast<std::size_t>(p.layout)]), state.settings_focus == 0, row_height);
+        setting_label(489, "Grid look", localize(display_language, p.layout != Layout::grid ? "Available in Grid layout" :
               p.grid_look == GridLook::icons ? "3D console icons" : "Classic cards"),
-              state.settings_focus == 1);
-        setting_label(609, "isShelf logo", localize(display_language, icon_names[static_cast<std::size_t>(p.icon)]), state.settings_focus == 2);
-        setting_label(699, "Missing emulator artwork", localize(display_language, p.monochrome_missing ? "Black & white" : "Full colour"),
-              state.settings_focus == 3);
-        setting_label(789, "Motion", localize(display_language, p.reduced_motion ? "Reduced: instant page changes" : "Smooth console transitions"),
-              state.settings_focus == 4);
+              state.settings_focus == 1, row_height);
+        setting_label(564, "isShelf logo", localize(display_language, icon_names[static_cast<std::size_t>(p.icon)]), state.settings_focus == 2, row_height);
+        setting_label(639, "Missing emulator artwork", localize(display_language, p.monochrome_missing ? "Black & white" : "Full colour"),
+              state.settings_focus == 3, row_height);
+        setting_label(714, "Motion", localize(display_language, p.reduced_motion ? "Reduced: instant page changes" : "Smooth console transitions"),
+              state.settings_focus == 4, row_height);
+        setting_label(789, "Language", language_labels[static_cast<std::size_t>(p.language)],
+              state.settings_focus == 5, row_height);
     } else if (state.tab == SettingsTab::browse) {
         ui_text("Find your next favourite", content_x, 338, 34, white, true);
         ui_text("Choose an order and narrow down your collection.", content_x, 388, 24, muted);
         setting_label(435, "Sort by", localize(display_language, sorts[static_cast<std::size_t>(p.sort)]), state.settings_focus == 0);
         setting_label(539, "Brand", p.brand ? brands[p.brand] : localize(display_language, "All brands"), state.settings_focus == 1);
         setting_label(643, "Availability", localize(display_language, filters[static_cast<std::size_t>(p.filter)]), state.settings_focus == 2);
-        setting_label(747, "Shelf pages", p.shelf_single ? "One curated shelf: choose up to 8 consoles" :
-              "Browse collection: 8 consoles per page", state.settings_focus == 3);
-        text(p.shelf_single ? "Choose your 8 in Consoles. Grid and Swipe keep your full collection." :
+        setting_label(747, "Shelf pages", localize(display_language, p.shelf_single ? "One curated shelf: choose up to 8 consoles" :
+              "Browse collection: 8 consoles per page"), state.settings_focus == 3);
+        ui_text(p.shelf_single ? "Choose your 8 in Consoles. Grid and Swipe keep your full collection." :
               "L1 / R1 changes pages in Shelf. Your filters apply to every page.", content_x + 6, 855, 21, muted,
              false, content_width - 12);
     } else if (state.tab == SettingsTab::room) {
-        text("Your room, your screen", content_x, 338, 34, white, true);
-        text("TV content sits behind the glass. Shelf layout only.", content_x, 388, 24, muted);
-        setting_label(421, "TV display", tv_labels[static_cast<std::size_t>(p.tv_mode)], state.settings_focus == 0);
+        ui_text("Your room, your screen", content_x, 338, 34, white, true);
+        ui_text("TV content sits behind the glass. Shelf layout only.", content_x, 388, 24, muted);
+        setting_label(421, "TV display", localize(display_language, tv_labels[static_cast<std::size_t>(p.tv_mode)]), state.settings_focus == 0);
         setting_label(505, "Personal message - Cross to edit", state.settings.tv_text, state.settings_focus == 1);
-        char interval[64]; std::snprintf(interval, sizeof(interval), "Every %u seconds", tv_periods[p.tv_period]);
+        char interval[64]; std::snprintf(interval, sizeof(interval), localize(display_language, "Every %u seconds").data(), tv_periods[p.tv_period]);
         setting_label(589, "Favourite game rotation", interval, state.settings_focus == 2);
-        setting_label(673, "Console intros", p.intro_all ? "All consoles" : "Installed emulators and built-in systems", state.settings_focus == 3);
-        setting_label(757, "TV static for missing content", noise_labels[static_cast<std::size_t>(p.tv_noise)], state.settings_focus == 4);
-        text("Own intros: /data/console-shelf/intros/<console-id>.png or .mpg", content_x + 6, 854, 20, muted,
+        setting_label(673, "Console intros", localize(display_language, p.intro_all ? "All consoles" : "Installed emulators and built-in systems"), state.settings_focus == 3);
+        setting_label(757, "TV static for missing content", localize(display_language, noise_labels[static_cast<std::size_t>(p.tv_noise)]), state.settings_focus == 4);
+        ui_text("Own intros: /data/console-shelf/intros/<console-id>.png or .mpg", content_x + 6, 854, 20, muted,
              false, content_width - 12);
-        text("isShelf originals included. Your personal PNG or MPEG-1 clip takes priority.", content_x + 6, 882,
+        ui_text("isShelf originals included. Your personal PNG or MPEG-1 clip takes priority.", content_x + 6, 882,
              19, muted, false, content_width - 12);
     } else {
-        setting_label(330, "Show on my shelf", p.scope == Scope::all ? "All consoles" :
-              p.scope == Scope::available ? "Emulator or games" : "Favourites only",
+        setting_label(330, "Show on my shelf", localize(display_language, p.scope == Scope::all ? "All consoles" :
+              p.scope == Scope::available ? "Emulator or games" : "Favourites only"),
               state.settings_focus == 0);
         box(content_x, 432, content_width, 58, state.settings_focus == 1);
         icon(0, content_x + 30, 460, muted);
-        text(state.console_query[0] ? state.console_query : "Find a console or brand...", content_x + 60, 446, 22,
-             state.console_query[0] ? white : muted, false, content_width - 80);
+        if (state.console_query[0])
+            text(state.console_query, content_x + 60, 446, 22, white, false, content_width - 80);
+        else
+            ui_text("Find a console or brand...", content_x + 60, 446, 22, muted, false, content_width - 80);
         std::size_t enabled = 0;
         for (std::size_t i = 0; i < system_count; ++i)
             if (p.shelf_single ? p.shelf_selected[i] : !p.hidden[i]) ++enabled;
         char tally[80];
-        std::snprintf(tally, sizeof(tally), "%zu of %zu %s", enabled, p.shelf_single ? shelf_capacity : system_count,
-                      p.shelf_single ? "display spaces filled" : "enabled");
+        std::snprintf(tally, sizeof(tally), localize(display_language, "%zu of %zu %s").data(),
+                      enabled, p.shelf_single ? shelf_capacity : system_count,
+                      localize(display_language, p.shelf_single ? "display spaces filled" : "enabled").data());
         text(tally, content_x + 4, 509, 20, muted);
         rounded(697, 500, 194, 42, 10, state.settings_focus == 2 ? purple : SDL_Color{29, 34, 57, 255});
-        centered(p.shelf_single ? "Fill spaces" : state.console_query[0] ? "Show results" : "Show all", 794, 507, 20,
+        ui_centered(p.shelf_single ? "Fill spaces" : state.console_query[0] ? "Show results" : "Show all", 794, 507, 20,
                  state.settings_focus == 2 ? panel : muted, true);
         rounded(906, 500, 216, 42, 10, state.settings_focus == 3 ? purple : SDL_Color{29, 34, 57, 255});
-        centered(p.shelf_single ? "Clear selection" : state.console_query[0] ? "Hide results" : "Hide all", 1014, 507, 20,
+        ui_centered(p.shelf_single ? "Clear selection" : state.console_query[0] ? "Hide results" : "Hide all", 1014, 507, 20,
                  state.settings_focus == 3 ? panel : muted, true);
         const auto picker = console_picker(state);
         const int selected = state.settings_focus - 4;
@@ -1641,7 +1650,7 @@ void settings(const UiState& state) {
                 rounded(content_x, y, content_width, 62, 12, {58, 48, 88, 255});
             if (e.group) {
                 text(brands[e.index], content_x + 20, y + 17, 23, purple, true);
-                text("Cross: toggle brand", 907, y + 20, 18, muted);
+                ui_text("Cross: toggle brand", 907, y + 20, 18, muted);
             } else {
                 const auto& s = catalog[e.index];
                 const bool enabled_item = p.shelf_single ? p.shelf_selected[e.index] : !p.hidden[e.index];
@@ -1653,10 +1662,10 @@ void settings(const UiState& state) {
         }
         SDL_RenderSetClipRect(renderer, nullptr);
         if (!picker.count)
-            centered("No consoles match this search", panel_x + panel_width / 2, 647, 27, muted);
+            ui_centered("No consoles match this search", panel_x + panel_width / 2, 647, 27, muted);
     }
     rect(panel_x + 1, 913, panel_width - 2, 62, {15, 19, 35, 255});
-    text("L1 / R1  Sections     D-pad  Choose     Cross / Left / Right  Change     Circle  Done",
+    ui_text("L1 / R1  Sections     D-pad  Choose     Cross / Left / Right  Change     Circle  Done",
          content_x, 929, 20, muted, false, content_width);
 }
 void keyboard(const UiState& state) {

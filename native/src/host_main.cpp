@@ -616,7 +616,7 @@ bool report(const char* path, const shelf::UiState& state) {
     std::fprintf(file,
                  "],\"queryLength\":%zu,\"pickerQueryLength\":%zu,\"launchConnected\":%s,\"libraryGames\":%zu,"
                  "\"libraryRoutes\":%zu,\"artworkCached\":%zu,\"artworkMissing\":%zu,\"artworkFailed\":%zu,\"monochromeMissing\":%s,\"shelfSingle\":%s,\"reducedMotion\":%s,"
-                 "\"shelfPage\":%d,\"shelfSelected\":%zu,\"tvMode\":%d,\"tvTextLength\":%zu,\"favoriteGames\":%zu,"
+                 "\"shelfPage\":%d,\"shelfSelected\":%zu,\"language\":\"%s\",\"tvMode\":%d,\"tvTextLength\":%zu,\"favoriteGames\":%zu,"
                  "\"tileRemoving\":%s,\"tileRequested\":%s,\"tileAction\":%d,\"tileFocus\":%d,"
                  "\"tileRemovalBatchReady\":%s,\"tileRemovalCount\":%zu}\n",
                  std::strlen(state.query), std::strlen(state.console_query), state.launch_connected ? "true" : "false",
@@ -626,6 +626,7 @@ bool report(const char* path, const shelf::UiState& state) {
                  p.monochrome_missing ? "true" : "false", p.shelf_single ? "true" : "false",
                  p.reduced_motion ? "true" : "false", state.focus / 8,
                  static_cast<std::size_t>(std::count(p.shelf_selected.begin(), p.shelf_selected.end(), true)),
+                 p.language == shelf::Language::swedish ? "sv" : "en",
                  static_cast<int>(p.tv_mode), std::strlen(state.settings.tv_text),
                  static_cast<std::size_t>(std::count_if(state.settings.game_favorites.begin(), state.settings.game_favorites.end(),
                                                        [](std::uint64_t key) { return key != 0; })),
