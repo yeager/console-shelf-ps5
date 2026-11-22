@@ -22,6 +22,7 @@ function run(script,ownedData=data,expected=0,animate=false,libraryRoot=null){
   return result;
 }
 run('shot:home.png,right,confirm,shot:details.png,back,settings,shot:appearance.png,confirm,tab,shot:browse.png,tab,down,confirm,text:Nintendo,settings,shot:consoles.png,down,down,confirm,report:changed.json,back,shot:swipe.png');
+run('settings,tab,tab,tab,shot:room.png');
 const swedishData=path.join(directory,'swedish-data');fs.mkdirSync(swedishData);
 fs.copyFileSync(path.join(data,'settings.ini'),path.join(swedishData,'settings.ini'));
 run('settings,down,down,down,down,down,right,shot:swedish-appearance.png,back,report:swedish-changed.json',swedishData);
@@ -33,7 +34,7 @@ assert.equal(swedishReopened.language,'sv','controller-selected language persist
 const digest=name=>crypto.createHash('sha256').update(fs.readFileSync(path.join(captures,name))).digest('hex');
 assert.notEqual(digest('home.png'),digest('swedish-home.png'),'Swedish UI visibly differs from the English UI');
 assert.notEqual(digest('appearance.png'),digest('swedish-appearance.png'),'Swedish settings visibly translate UI copy');
-assert.notEqual(digest('home.png'),digest('swedish-room.png'),'Swedish Play room visibly translates its UI copy');
+assert.notEqual(digest('room.png'),digest('swedish-room.png'),'Swedish Play room visibly translates its UI copy');
 const changed=JSON.parse(fs.readFileSync(path.join(captures,'changed.json')));
 assert.equal(changed.page,3);assert.equal(changed.tab,2);assert.equal(changed.layout,'swipe');
 assert.equal(changed.shown,36);assert.equal(changed.hidden.length,16);assert.ok(changed.hidden.includes('n64'));assert.ok(!changed.hidden.includes('ps2'));
