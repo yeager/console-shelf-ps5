@@ -1254,10 +1254,10 @@ void detail(const UiState& state) {
                                        : localize(display_language, "No emulator detected"),
           !state.tools && state.detail_focus == 0, 920);
     box(80, 631, 443, 82, !state.tools && state.detail_focus == 1);
-    text("Open emulator library", 107, 652, 27,
+    ui_text("Open emulator library", 107, 652, 27,
          state.inventory[id].emulator_count ? white : muted, true);
     box(547, 631, 453, 82, !state.tools && state.detail_focus == 2);
-    text("Show game library", 575, 652, 29, white, true);
+    ui_text("Show game library", 575, 652, 29, white, true);
     box(80, 750, 920, 82, !state.tools && state.detail_focus == 3);
     const bool tile_status_known = state.tile_observation_system == id;
     const bool tile_removing = state.tile_removing[id] || state.tile_removal_batch_ready;
@@ -1896,13 +1896,13 @@ void graphics_render(const UiState& state, unsigned time_ms, bool animate) {
         splash(1 - state.presentation.reveal, time_ms, false, 1, state.settings.preferences.icon);
     if (state.presentation.hold > 0 && state.presentation.close == 0) {
         rounded(660, 909, 600, 88, 18, {30, 30, 48, 245});
-        centered("Hold Circle to close isShelf", 960, 924, 24, white);
+        ui_centered("Hold Circle to close isShelf", 960, 924, 24, white);
         rounded(707, 969, 506, 5, 2, {64, 62, 83, 255});
         rounded(707, 969, std::max(1, static_cast<int>(506 * state.presentation.hold)), 5, 2, purple);
     } else if (state.presentation.close_hint > 0 && !state.presentation.loading && state.presentation.close == 0) {
         const float opacity = state.presentation.close_hint;
         rounded(660, 909, 600, 88, 18, {30, 30, 48, static_cast<Uint8>(245 * opacity)});
-        centered("Hold Circle to close isShelf", 960, 924, 24, {white.r, white.g, white.b, static_cast<Uint8>(255 * opacity)});
+        ui_centered("Hold Circle to close isShelf", 960, 924, 24, {white.r, white.g, white.b, static_cast<Uint8>(255 * opacity)});
         centered("Keep holding for 3 seconds", 960, 961, 18,
                  {muted.r, muted.g, muted.b, static_cast<Uint8>(255 * opacity)});
     }
