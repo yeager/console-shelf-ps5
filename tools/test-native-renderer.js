@@ -23,6 +23,9 @@ function run(script,ownedData=data,expected=0,animate=false,libraryRoot=null){
 }
 run('shot:home.png,right,confirm,shot:details.png,back,settings,shot:appearance.png,confirm,tab,shot:browse.png,tab,down,confirm,text:Nintendo,settings,shot:consoles.png,down,down,confirm,report:changed.json,back,shot:swipe.png');
 run('settings,tab,tab,tab,shot:room.png');
+const englishLocaleData=path.join(directory,'english-locale-data');fs.mkdirSync(englishLocaleData);
+fs.copyFileSync(path.join(data,'settings.ini'),path.join(englishLocaleData,'settings.ini'));
+run('shot:english-home.png,settings,down,down,down,down,down,shot:english-appearance-language.png,back,settings,tab,tab,tab,shot:english-room.png',englishLocaleData);
 const swedishData=path.join(directory,'swedish-data');fs.mkdirSync(swedishData);
 fs.copyFileSync(path.join(data,'settings.ini'),path.join(swedishData,'settings.ini'));
 run('settings,down,down,down,down,down,right,shot:swedish-appearance.png,back,report:swedish-changed.json',swedishData);
@@ -32,9 +35,18 @@ run('report:swedish-reopened.json,shot:swedish-home.png,settings,tab,tab,tab,sho
 const swedishReopened=JSON.parse(fs.readFileSync(path.join(captures,'swedish-reopened.json')));
 assert.equal(swedishReopened.language,'sv','controller-selected language persists after reopening');
 const digest=name=>crypto.createHash('sha256').update(fs.readFileSync(path.join(captures,name))).digest('hex');
-assert.notEqual(digest('home.png'),digest('swedish-home.png'),'Swedish UI visibly differs from the English UI');
-assert.notEqual(digest('appearance.png'),digest('swedish-appearance.png'),'Swedish settings visibly translate UI copy');
-assert.notEqual(digest('room.png'),digest('swedish-room.png'),'Swedish Play room visibly translates its UI copy');
+assert.notEqual(digest('english-home.png'),digest('swedish-home.png'),'matching Home screens visibly render Swedish labels');
+assert.notEqual(digest('english-appearance-language.png'),digest('swedish-appearance.png'),'matching Appearance states visibly render the Swedish language label');
+assert.notEqual(digest('english-room.png'),digest('swedish-room.png'),'matching Play room screens visibly render Swedish labels');
+const englishCloseData=path.join(directory,'english-close-data');fs.mkdirSync(englishCloseData);
+fs.copyFileSync(path.join(data,'settings.ini'),path.join(englishCloseData,'settings.ini'));
+run('back,frame:250,shot:english-close-hint.png',englishCloseData,0,true);
+run('back,frame:250,shot:swedish-close-hint.png',swedishData,0,true);
+assert.notEqual(digest('english-close-hint.png'),digest('swedish-close-hint.png'),'matching close hints visibly render the Swedish hold instruction');
+const graphicsSource=fs.readFileSync(path.join(root,'native/src/graphics.cpp'),'utf8');
+assert.match(graphicsSource,/ui_text\(caption\.badge/,'launch badge is rendered through the localization helper');
+assert.match(graphicsSource,/ui_text\(caption\.action/,'launch action is rendered through the localization helper');
+assert.match(graphicsSource,/ui_text\(caption\.expectation/,'launch expectation is rendered through the localization helper');
 const changed=JSON.parse(fs.readFileSync(path.join(captures,'changed.json')));
 assert.equal(changed.page,3);assert.equal(changed.tab,2);assert.equal(changed.layout,'swipe');
 assert.equal(changed.shown,36);assert.equal(changed.hidden.length,16);assert.ok(changed.hidden.includes('n64'));assert.ok(!changed.hidden.includes('ps2'));

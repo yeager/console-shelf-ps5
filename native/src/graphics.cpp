@@ -896,7 +896,7 @@ bool tv_video(const SystemDefinition& system, std::size_t id, const SDL_Rect& ta
     tv_motion = !still && tv_movie.playing();
     if (movie_demo) {
         rect(target.x, target.y + target.h - 30, target.w, 30, {4, 12, 15, 220});
-        centered("isShelf demo - add your own console intro", target.x + target.w / 2, target.y + target.h - 24, 16, muted);
+        ui_centered("isShelf demo - add your own console intro", target.x + target.w / 2, target.y + target.h - 24, 16, muted);
     }
     return true;
 }
@@ -962,7 +962,7 @@ void room_tv(const UiState& state) {
         picture(icon_files[static_cast<std::size_t>(p.icon)], x + w / 2 - 31, y + 33, 62, 62, 210);
         tv_lines(state.settings.tv_text, x + 42, y + 129, w - 84, 31, {230, 248, 243, 230});
         if (p.tv_mode == TvMode::picture)
-            centered("Add tv-image.png to your isShelf data folder", x + w / 2, y + h - 38, 17, muted);
+            ui_centered("Add tv-image.png to your isShelf data folder", x + w / 2, y + h - 38, 17, muted);
     } else if (!pictured && p.tv_mode == TvMode::clock) {
         const auto now = std::time(nullptr); const auto* local = std::localtime(&now);
         char clock[16] = "--:--", date[80]{};
@@ -989,11 +989,11 @@ void room_tv(const UiState& state) {
             const auto& game = state.library->games[games[(render_time / (tv_periods[p.tv_period] * 1000u)) % count]];
             game_picture(game, x + w / 2 - 115, y + 15, 230, 150, 215);
             tv_lines(game.name, x + 35, y + 176, w - 70, 25, {233, 249, 246, 230});
-            centered("FROM YOUR FAVOURITES", x + w / 2, y + h - 31, 15, {161, 207, 195, 210}, true);
+            ui_centered("FROM YOUR FAVOURITES", x + w / 2, y + h - 31, 15, {161, 207, 195, 210}, true);
         } else {
             picture(icon_files[static_cast<std::size_t>(p.icon)], x + w / 2 - 30, y + 41, 60, 60, 200);
-            centered("Your favourite games", x + w / 2, y + 136, 27, {233, 249, 246, 230}, true);
-            centered("Press Triangle on a game in isShelf's library", x + w / 2, y + 193, 19, {180, 212, 204, 230});
+            ui_centered("Your favourite games", x + w / 2, y + 136, 27, {233, 249, 246, 230}, true);
+            ui_centered("Press Triangle on a game in isShelf's library", x + w / 2, y + 193, 19, {180, 212, 204, 230});
         }
     }
     // Glass, a soft upper reflection and edge falloff keep content inside the photographed screen.
@@ -1024,27 +1024,30 @@ void home(const UiState& state) {
     if (room) room_control(header_x, tool_y, 760, 66, state.tools && state.tool == 0);
     else box(80, tool_y, 1560, 66, state.tools && state.tool == 0);
     icon(0, header_x + 31, tool_y + 32, room ? SDL_Color{185, 205, 193, 255} : muted);
-    text(state.query[0] ? state.query : "Find a console, brand or core...", header_x + 63, tool_y + 16, 24,
-         state.query[0] ? white : room ? SDL_Color{185, 205, 193, 255} : muted, false, room ? 670 : 1420);
+    if (state.query[0])
+        text(state.query, header_x + 63, tool_y + 16, 24, white, false, room ? 670 : 1420);
+    else
+        ui_text("Find a console, brand or core...", header_x + 63, tool_y + 16, 24,
+                room ? SDL_Color{185, 205, 193, 255} : muted, false, room ? 670 : 1420);
     const int layout_x = room ? 968 : 1664;
     if (room) room_control(layout_x, tool_y, 170, 66, state.tools && state.tool == 1);
     else box(layout_x, tool_y, 180, 66, state.tools && state.tool == 1);
     icon(p.layout == Layout::grid ? 4 : 2, layout_x + 32, tool_y + 33);
-    text(layout_labels[static_cast<std::size_t>(next_layout(p.layout))], layout_x + 58, tool_y + 17, 24, white, true);
+    text(localize(display_language, layout_labels[static_cast<std::size_t>(next_layout(p.layout))]), layout_x + 58, tool_y + 17, 24, white, true);
     char summary[160];
-    std::snprintf(summary, sizeof(summary), "%s  /  %.*s  /  %zu systems", layout_labels[static_cast<std::size_t>(p.layout)].data(),
+    std::snprintf(summary, sizeof(summary), "%s  /  %.*s  /  %zu systems", localize(display_language, layout_labels[static_cast<std::size_t>(p.layout)]).data(),
                   static_cast<int>(sorts[static_cast<std::size_t>(p.sort)].size()),
                   sorts[static_cast<std::size_t>(p.sort)].data(), shown.count);
     text(summary, room ? 192 : 84, summary_y, 20, room ? SDL_Color{190, 205, 196, 255} : muted);
     if (!shown.count) {
         if (state.library_discovering) {
             ui_centered("Finding your emulators and games", 960, 620, 42, white, true);
-            centered("Your systems will appear here as soon as discovery finishes.", 960, 679, 26, muted);
+            ui_centered("Your systems will appear here as soon as discovery finishes.", 960, 679, 26, muted);
         } else {
             ui_centered("Your shelf is ready for your choices", 960, 620, 42, white, true);
-            centered(p.layout == Layout::shelf && p.shelf_single ? "Choose up to 8 consoles in Settings > Consoles." :
-                     p.scope == Scope::favorites ? "Add favourites with Triangle, or change the view in Settings." :
-                     "Choose All consoles or enable systems in settings.", 960, 679, 26, muted);
+            ui_centered(p.layout == Layout::shelf && p.shelf_single ? "Choose up to 8 consoles in Settings > Consoles." :
+                        p.scope == Scope::favorites ? "Add favourites with Triangle, or change the view in Settings." :
+                        "Choose All consoles or enable systems in settings.", 960, 679, 26, muted);
         }
         footer("Cross  Choose consoles    Options  Settings    Circle  Back");
         return;
@@ -1066,7 +1069,7 @@ void home(const UiState& state) {
                 picture(s.image, x + 20, y + 7, 376, 166, 255, monochrome);
             else {
                 text(s.brand, x + 22, y + 25, 22, purple, true);
-                text("CONSOLE", x + 22, y + 70, 38, muted, true);
+                ui_text("CONSOLE", x + 22, y + 70, 38, muted, true);
             }
             text(s.name, x + 20, y + 173, 26, white, true, 374);
             text(availability(state, id), x + 20, y + 212, 19, muted, false, 374);
@@ -1171,7 +1174,7 @@ void home(const UiState& state) {
 void detail(const UiState& state) {
     const auto id = state.selected_system;
     const auto& s = catalog[id];
-    text("YOUR SYSTEM COLLECTION", 80, 145, 20, purple, true);
+    ui_text("YOUR SYSTEM COLLECTION", 80, 145, 20, purple, true);
     text(s.name, 80, 194, 58, white, true, 1100);
     text(s.brand, 84, 275, 27, muted);
     if (state.page == Page::library && state.inventory[id].game_count) {
@@ -1206,15 +1209,15 @@ void detail(const UiState& state) {
         rect(80, 420, 4, 86, mode_color);
         text(route ? route->name : state.inventory[id].built_in ? "PS5 system" : "Launch information",
              104, 412, 19, {207, 218, 213, 255}, false, 690);
-        text(caption.badge, 842, 412, 17, mode_color, true, 220);
-        text(caption.action, 104, 440, 29, white, true, 940);
-        text(caption.expectation, 104, 482, 20, {215, 222, 219, 255}, false, 940);
+        ui_text(caption.badge, 842, 412, 17, mode_color, true, 220);
+        ui_text(caption.action, 104, 440, 29, white, true, 940);
+        ui_text(caption.expectation, 104, 482, 20, {215, 222, 219, 255}, false, 940);
         if (!state.library) {
-            text("Your library", 84, 554, 38, white, true);
-            text("Connect a library to see your games here.", 84, 615, 26, muted);
+            ui_text("Your library", 84, 554, 38, white, true);
+            ui_text("Connect a library to see your games here.", 84, 615, 26, muted);
         } else {
             if (!games.count)
-                text("No games found for this console yet.", 84, 558, 26, muted);
+                ui_text("No games found for this console yet.", 84, 558, 26, muted);
             const int start = state.game_focus / 8 * 8;
             for (int row = 0; row < 8 && static_cast<std::size_t>(start + row) < games.count; ++row) {
                 const auto& game = state.library->games[games.indices[static_cast<std::size_t>(start + row)]];
@@ -1233,16 +1236,17 @@ void detail(const UiState& state) {
                 const auto selected_index = std::min(games.count - 1, static_cast<std::size_t>(std::max(0, state.game_focus)));
                 const auto& selected = state.library->games[games.indices[selected_index]];
                 rounded(1150, 254, 690, 730, 28, {10, 18, 21, 255});
-                text("YOUR GAME COLLECTION", 1190, 281, 18, {170, 199, 190, 255}, true, 600);
+                ui_text("YOUR GAME COLLECTION", 1190, 281, 18, {170, 199, 190, 255}, true, 600);
                 glow(1220, 390, 540, 450, accent(s), 46);
                 game_picture(selected, 1190, 327, 610, 550);
                 text(selected.name, 1190, 916, 25, white, true, 600);
-                text(selected.artwork_ready ? "From your collection" : "Artwork not available yet",
-                     1190, 953, 18, muted, false, 600);
+                ui_text(selected.artwork_ready ? "From your collection" : "Artwork not available yet",
+                        1190, 953, 18, muted, false, 600);
             }
         }
         char actions[240];
-        std::snprintf(actions, sizeof(actions), "Cross  %s    D-pad  Browse    Left / Right  Page    Triangle  Favourite    Circle  Back", caption.action);
+        std::snprintf(actions, sizeof(actions), localize(display_language, "Cross  %.*s    D-pad  Browse    Left / Right  Page    Triangle  Favourite    Circle  Back").data(),
+                      static_cast<int>(localize(display_language, caption.action).size()), localize(display_language, caption.action).data());
         footer(actions);
         return;
     }
@@ -1671,7 +1675,7 @@ void settings(const UiState& state) {
 void keyboard(const UiState& state) {
     rect(0, 0, width, height, {4, 6, 16, 210});
     box(330, 215, 1260, 650, false, {20, 23, 41, 255});
-    text(state.keyboard_for_tv ? "Your room message" : "Find a console", 380, 248, 38, white, true);
+    ui_text(state.keyboard_for_tv ? "Your room message" : "Find a console", 380, 248, 38, white, true);
     box(380, 318, 1160, 66, false);
     text(state.keyboard_for_tv ? state.settings.tv_text : state.keyboard_for_consoles ? state.console_query : state.query,
          407, 333, 29, purple, true);
@@ -1686,10 +1690,11 @@ void keyboard(const UiState& state) {
                                 : key == '!' ? "Clear"
                                 : key == '^' ? "Done"
                                              : label_text;
-        centered(displayed, x + 52, y + 15, key == '_' || key == '!' || key == '^' ? 19 : 26, active ? panel : white,
-                 true);
+        key == '<' || key == '_' || key == '!' || key == '^'
+            ? ui_centered(displayed, x + 52, y + 15, 19, active ? panel : white, true)
+            : centered(displayed, x + 52, y + 15, 26, active ? panel : white, true);
     }
-    text("Cross  Type     Square  Delete     Triangle  Clear     Options / Circle  Done", 384, 783, 22, muted);
+    ui_text("Cross  Type     Square  Delete     Triangle  Clear     Options / Circle  Done", 384, 783, 22, muted);
 }
 void update_prompt(const UiState& state) {
     if (state.update_prompt == UpdatePrompt::none) return;
@@ -1860,9 +1865,9 @@ void graphics_render(const UiState& state, unsigned time_ms, bool animate) {
                 text("REMOTE SUPPORT ACTIVE / L3 + R3 TO STOP", 1170, 42, 18, purple, true);
             else {
 #ifdef SHELF_PS5
-                text("PS5 / DEVELOPMENT BUILD", 1388, 42, 18, muted, true);
+                ui_text("PS5 / DEVELOPMENT BUILD", 1388, 42, 18, muted, true);
 #else
-                text("NATIVE DEVELOPMENT BUILD / PC", 1388, 42, 18, muted, true);
+                ui_text("NATIVE DEVELOPMENT BUILD / PC", 1388, 42, 18, muted, true);
 #endif
             }
             if (state.page != Page::shortcut_route)
@@ -1903,15 +1908,15 @@ void graphics_render(const UiState& state, unsigned time_ms, bool animate) {
         const float opacity = state.presentation.close_hint;
         rounded(660, 909, 600, 88, 18, {30, 30, 48, static_cast<Uint8>(245 * opacity)});
         ui_centered("Hold Circle to close isShelf", 960, 924, 24, {white.r, white.g, white.b, static_cast<Uint8>(255 * opacity)});
-        centered("Keep holding for 3 seconds", 960, 961, 18,
-                 {muted.r, muted.g, muted.b, static_cast<Uint8>(255 * opacity)});
+        ui_centered("Keep holding for 3 seconds", 960, 961, 18,
+                    {muted.r, muted.g, muted.b, static_cast<Uint8>(255 * opacity)});
     }
     if (state.presentation.close > 0) {
         const auto alpha = static_cast<Uint8>(state.presentation.close * 255);
         rect(0, 0, width, height, {9, 12, 26, alpha});
         picture(icon_files[static_cast<std::size_t>(state.settings.preferences.icon)], 916, 413, 88, 88, alpha);
-        centered(state.presentation.launching ? "Opening your selection" : "Closing isShelf", 960, 552, 29,
-                 {241, 240, 251, alpha});
+        ui_centered(state.presentation.launching ? "Opening your selection" : "Closing isShelf", 960, 552, 29,
+                    {241, 240, 251, alpha});
     }
     SDL_RenderPresent(renderer);
 }
