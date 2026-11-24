@@ -121,4 +121,7 @@ std::string_view localize(Language language, std::string_view source) {
             return entry.swedish;
     return source;
 }
+std::string_view localize_room_message(Language language, std::string_view value, bool customized) {
+    return customized ? value : localize(language, default_room_message);
+}
 } // namespace shelf

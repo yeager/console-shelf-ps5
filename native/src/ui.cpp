@@ -207,6 +207,17 @@ void open_keyboard(UiState& state, bool consoles, bool tv = false) {
     state.page = Page::keyboard;
     state.keyboard_focus = 0;
 }
+bool prepare_tv_text_for_edit(UiState& state, std::size_t additional = 0) {
+    if (state.settings.tv_text_customized)
+        return true;
+    const auto message = localize_room_message(state.settings.preferences.language, state.settings.tv_text, false);
+    if (message.size() + additional >= sizeof(state.settings.tv_text))
+        return false;
+    std::memcpy(state.settings.tv_text, message.data(), message.size());
+    state.settings.tv_text[message.size()] = 0;
+    state.settings.tv_text_customized = true;
+    return true;
+}
 void changed(UiState& state) {
     state.changed = true;
     normalize_home(state);
@@ -301,6 +312,8 @@ void cycle(UiState& state, int direction) {
     }
 }
 void erase_query(UiState& state) {
+    if (state.keyboard_for_tv && !prepare_tv_text_for_edit(state))
+        return;
     char* query = state.keyboard_for_tv ? state.settings.tv_text : state.keyboard_for_consoles ? state.console_query : state.query;
     auto size = std::strlen(query);
     if (size) {
@@ -348,13 +361,16 @@ PickerList console_picker(const UiState& state) {
 void text_input(UiState& state, const char* utf8) {
     if (state.page != Page::keyboard)
         return;
-    char* query = state.keyboard_for_tv ? state.settings.tv_text : state.keyboard_for_consoles ? state.console_query : state.query;
-    const auto size = std::strlen(query), extra = std::strlen(utf8);
-    if (size + extra >= (state.keyboard_for_tv ? sizeof(state.settings.tv_text) : sizeof(state.query)))
-        return;
+    const auto extra = std::strlen(utf8);
     for (std::size_t i = 0; i < extra; ++i)
         if (static_cast<unsigned char>(utf8[i]) < 32)
             return;
+    if (state.keyboard_for_tv && !prepare_tv_text_for_edit(state, extra))
+        return;
+    char* query = state.keyboard_for_tv ? state.settings.tv_text : state.keyboard_for_consoles ? state.console_query : state.query;
+    const auto size = std::strlen(query);
+    if (size + extra >= (state.keyboard_for_tv ? sizeof(state.settings.tv_text) : sizeof(state.query)))
+        return;
     std::memcpy(query + size, utf8, extra + 1);
     if (state.keyboard_for_tv) state.changed = true;
     else normalize_home(state);
@@ -403,6 +419,8 @@ void input(UiState& state, Action action) {
         if (action == Action::erase)
             erase_query(state);
         if (action == Action::favorite) {
+            if (state.keyboard_for_tv && !prepare_tv_text_for_edit(state))
+                return;
             (state.keyboard_for_tv ? state.settings.tv_text : state.keyboard_for_consoles ? state.console_query : state.query)[0] = 0;
             if (state.keyboard_for_tv) state.changed = true;
             else normalize_home(state);
@@ -414,6 +432,8 @@ void input(UiState& state, Action action) {
             else if (key == '<')
                 erase_query(state);
             else if (key == '!') {
+                if (state.keyboard_for_tv && !prepare_tv_text_for_edit(state))
+                    return;
                 (state.keyboard_for_tv ? state.settings.tv_text : state.keyboard_for_consoles ? state.console_query : state.query)[0] = 0;
                 if (state.keyboard_for_tv) state.changed = true;
                 else normalize_home(state);

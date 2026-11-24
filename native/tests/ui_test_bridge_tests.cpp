@@ -176,6 +176,7 @@ void test_ui_test_bridge() {
     state.tab = SettingsTab::room;
     std::strcpy(state.query, "private-query");
     std::strcpy(state.settings.tv_text, "private-room-text");
+    state.settings.tv_text_customized = true;
     std::strcpy(state.notice, "private-path/data/game.cue");
     UiTestRequest ready;
     std::strcpy(ready.name, "snapshot");

@@ -12,6 +12,7 @@ struct Settings {
     // never authorize a tile, helper, or database mutation.
     std::array<tile_route::settings_codec::Slot, system_count> shortcut_routes{};
     char tv_text[96] = "Welcome to your play room";
+    bool tv_text_customized = false;
     std::array<std::uint64_t, 64> game_favorites{};
 };
 enum class SettingsLoad { loaded, missing, backup, invalid };

@@ -31,6 +31,10 @@ void test_settings() {
     check(localize(Language::swedish, "%zu of %zu %s") == "%zu av %zu %s", "Swedish catalogue translates formatted counters");
     check(localize(Language::swedish, "%zu games  /  %zu emulator routes") == "%zu spel  /  %zu emulatorvägar",
           "Swedish catalogue translates the formatted TV counter");
+    check(localize_room_message(Language::swedish, default_room_message, false) == "Välkommen till ditt spelrum",
+          "the default room message follows the selected language");
+    check(localize_room_message(Language::swedish, default_room_message, true) == default_room_message,
+          "a customized personal message remains literal even when it matches a catalogue entry");
     check(localize(Language::swedish, "Uncatalogued fallback") == "Uncatalogued fallback",
           "new source text remains usable before its catalogue entry exists");
     const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
@@ -221,6 +225,7 @@ void test_settings() {
     displayed.preferences.tv_period = 3;
     displayed.preferences.intro_all = true;
     std::strcpy(displayed.tv_text, "Iswebro's play room = home");
+    displayed.tv_text_customized = true;
     displayed.game_favorites[3] = 0x0123456789abcdefull;
     check(save_settings(path, displayed) && load_settings(path, read) == SettingsLoad::loaded &&
               !read.preferences.monochrome_missing, "the full-colour override survives an atomic save and reopen");
@@ -228,7 +233,15 @@ void test_settings() {
           read.preferences.reduced_motion, "curated selection and motion choice survive reopen");
     check(read.preferences.tv_mode == TvMode::message && read.preferences.tv_noise == TvNoise::either && read.preferences.tv_period == 3 &&
           read.preferences.intro_all && std::strcmp(read.tv_text, "Iswebro's play room = home") == 0 &&
+          read.tv_text_customized &&
           read.game_favorites[3] == 0x0123456789abcdefull, "room display, text, timing and game identities survive atomic save/reopen");
+    auto matching_custom_message = read;
+    std::strcpy(matching_custom_message.tv_text, default_room_message.data());
+    matching_custom_message.tv_text_customized = true;
+    check(save_settings(path, matching_custom_message) && load_settings(path, read) == SettingsLoad::loaded &&
+              read.tv_text_customized && localize_room_message(Language::swedish, read.tv_text, read.tv_text_customized) ==
+                                             default_room_message,
+          "a custom message matching the catalogue source stays literal after persistence");
     auto injected = read; std::strcpy(injected.tv_text, "name\nlayout=swipe");
     check(!save_settings(path, injected), "personal text cannot inject settings lines");
     auto duplicate = read; duplicate.game_favorites[4] = duplicate.game_favorites[3];
@@ -253,6 +266,12 @@ void test_settings() {
           "legacy settings use paged browsing and smooth motion without losing their choices");
     check(old_settings.preferences.tv_mode == TvMode::console && old_settings.preferences.tv_noise == TvNoise::off && old_settings.game_favorites[0] == 0,
           "legacy settings acquire room defaults without acquiring fabricated favourite games");
+    write(legacy, "version=1\nlayout=grid\nlook=icons\nscope=all\nsort=featured\nfilter=all\nicon=gaming\nbrand=\ntv_text=Welcome to your play room\n");
+    check(load_settings(legacy, old_settings) == SettingsLoad::loaded && !old_settings.tv_text_customized,
+          "legacy default room text migrates as translatable UI copy");
+    write(legacy, "version=1\nlayout=grid\nlook=icons\nscope=all\nsort=featured\nfilter=all\nicon=gaming\nbrand=\ntv_text=Personal message\n");
+    check(load_settings(legacy, old_settings) == SettingsLoad::loaded && old_settings.tv_text_customized,
+          "legacy non-default room text migrates as user content");
     write(legacy, "version=1\nlayout=grid\nlook=icons\nscope=all\nsort=featured\nfilter=all\nicon=gaming\nbrand=\nmonochrome_missing=2\n");
     check(load_settings(legacy, old_settings) == SettingsLoad::invalid, "malformed optional styles are not accepted");
     write(legacy, "version=1\nlayout=grid\nlook=icons\nscope=all\nsort=featured\nfilter=all\nicon=gaming\nbrand=\nroute.ps2=unrecognized\n");

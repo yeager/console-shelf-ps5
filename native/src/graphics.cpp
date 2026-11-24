@@ -962,7 +962,8 @@ void room_tv(const UiState& state) {
                            x + w / 2, y + h - 39, 17, {166, 202, 197, alpha});
     } else if (!pictured && (p.tv_mode == TvMode::picture || p.tv_mode == TvMode::message)) {
         picture(icon_files[static_cast<std::size_t>(p.icon)], x + w / 2 - 31, y + 33, 62, 62, 210);
-        tv_lines(state.settings.tv_text, x + 42, y + 129, w - 84, 31, {230, 248, 243, 230});
+        tv_lines(localize_room_message(display_language, state.settings.tv_text, state.settings.tv_text_customized),
+                 x + 42, y + 129, w - 84, 31, {230, 248, 243, 230});
         if (p.tv_mode == TvMode::picture)
             ui_centered("Add tv-image.png to your isShelf data folder", x + w / 2, y + h - 38, 17, muted);
     } else if (!pictured && p.tv_mode == TvMode::clock) {
@@ -972,7 +973,8 @@ void room_tv(const UiState& state) {
         picture(icon_files[static_cast<std::size_t>(p.icon)], x + w / 2 - 27, y + 22, 54, 54, 190);
         centered(clock, x + w / 2, y + 88, 66, {229, 249, 244, 230}, true);
         centered(date, x + w / 2, y + 172, 20, {180, 212, 204, 230});
-        tv_lines(state.settings.tv_text, x + 42, y + 222, w - 84, 18, {180, 212, 204, 200});
+        tv_lines(localize_room_message(display_language, state.settings.tv_text, state.settings.tv_text_customized),
+                 x + 42, y + 222, w - 84, 18, {180, 212, 204, 200});
     } else if (!pictured && p.tv_mode == TvMode::favorites) {
         static const Library* previous_library = nullptr;
         static std::size_t previous_count = 0, count = 0;
@@ -1607,7 +1609,9 @@ void settings(const UiState& state) {
         ui_text("Your room, your screen", content_x, 338, 34, white, true);
         ui_text("TV content sits behind the glass. Shelf layout only.", content_x, 388, 24, muted);
         setting_label(421, "TV display", localize(display_language, tv_labels[static_cast<std::size_t>(p.tv_mode)]), state.settings_focus == 0);
-        setting_label(505, "Personal message - Cross to edit", state.settings.tv_text, state.settings_focus == 1);
+        setting_label(505, "Personal message - Cross to edit",
+                      localize_room_message(display_language, state.settings.tv_text, state.settings.tv_text_customized),
+                      state.settings_focus == 1);
         char interval[64]; std::snprintf(interval, sizeof(interval), localize(display_language, "Every %u seconds").data(), tv_periods[p.tv_period]);
         setting_label(589, "Favourite game rotation", interval, state.settings_focus == 2);
         setting_label(673, "Console intros", localize(display_language, p.intro_all ? "All consoles" : "Installed emulators and built-in systems"), state.settings_focus == 3);
@@ -1679,7 +1683,8 @@ void keyboard(const UiState& state) {
     box(330, 215, 1260, 650, false, {20, 23, 41, 255});
     ui_text(state.keyboard_for_tv ? "Your room message" : "Find a console", 380, 248, 38, white, true);
     box(380, 318, 1160, 66, false);
-    text(state.keyboard_for_tv ? state.settings.tv_text : state.keyboard_for_consoles ? state.console_query : state.query,
+    text(state.keyboard_for_tv ? localize_room_message(display_language, state.settings.tv_text, state.settings.tv_text_customized) :
+             state.keyboard_for_consoles ? state.console_query : state.query,
          407, 333, 29, purple, true);
     for (int i = 0; i < 40; ++i) {
         const int x = 380 + (i % 10) * 117, y = 418 + (i / 10) * 78;

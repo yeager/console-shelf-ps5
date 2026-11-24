@@ -15,6 +15,14 @@ void check(bool value, const char* message) {
 } // namespace
 void test_ui() {
     using namespace shelf;
+    UiState translated_room_edit;
+    translated_room_edit.page = Page::keyboard;
+    translated_room_edit.keyboard_for_tv = true;
+    translated_room_edit.settings.preferences.language = Language::swedish;
+    text_input(translated_room_edit, "!");
+    check(translated_room_edit.settings.tv_text_customized &&
+              std::strcmp(translated_room_edit.settings.tv_text, "Välkommen till ditt spelrum!") == 0,
+          "editing the Swedish default room message starts from its translated display");
     UiState state;
     input(state, Action::right);
     check(state.selected_system == find_system("ps4"), "D-pad moves through console identities");

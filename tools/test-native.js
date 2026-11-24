@@ -68,7 +68,7 @@ if (process.platform === 'win32') {
   };
   const command = `call ${quoted(developerCommand)} -no_logo -arch=x64 -host_arch=x64 >nul && cl.exe /nologo /std:c++17 /EHsc /utf-8 /D_CRT_SECURE_NO_WARNINGS /W4 /WX /I${quoted(includes)} /I${quoted(path.join(root,'native/third_party'))} ${[source,localization,settings,ui,uiBridge,update,tests,settingsTests,uiTests,pairingEntryTests,uiBridgeTests,uiTestPreviewTests,updateTests,consoleTileStartupTests,consoleTileRelayTests,consoleTileForwarderConfigTests,navigationTests,launchTests,...librarySources,libraryTests].map(quoted).join(' ')} /Fe:model-tests.exe`;
   run(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', `"${command}"`], { windowsVerbatimArguments: true });
-  const publicOwnerSupportCommand = `call ${quoted(developerCommand)} -no_logo -arch=x64 -host_arch=x64 >nul && cl.exe /nologo /std:c++17 /EHsc /utf-8 /D_CRT_SECURE_NO_WARNINGS /DSHELF_OWNER_SUPPORT_CONTROL /W4 /WX /I${quoted(includes)} /I${quoted(path.join(root,'native/third_party'))} ${[source,settings,ui,uiBridge,update,...librarySources,publicOwnerSupportTests].map(quoted).join(' ')} /Fe:public-owner-support-tests.exe`;
+  const publicOwnerSupportCommand = `call ${quoted(developerCommand)} -no_logo -arch=x64 -host_arch=x64 >nul && cl.exe /nologo /std:c++17 /EHsc /utf-8 /D_CRT_SECURE_NO_WARNINGS /DSHELF_OWNER_SUPPORT_CONTROL /W4 /WX /I${quoted(includes)} /I${quoted(path.join(root,'native/third_party'))} ${[source,localization,settings,ui,uiBridge,update,...librarySources,publicOwnerSupportTests].map(quoted).join(' ')} /Fe:public-owner-support-tests.exe`;
   run(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', `"${publicOwnerSupportCommand}"`], { windowsVerbatimArguments: true });
   const consoleTileCommand = `call ${quoted(developerCommand)} -no_logo -arch=x64 -host_arch=x64 >nul && cl.exe /nologo /std:c++17 /EHsc /utf-8 /D_CRT_SECURE_NO_WARNINGS /W4 /WX /I${quoted(includes)} ${quoted(consoleTileTests)} /Fe:console-tile-tests.exe`;
   run(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', `"${consoleTileCommand}"`], { windowsVerbatimArguments: true });
@@ -76,7 +76,7 @@ if (process.platform === 'win32') {
   run(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', `"${routePreferenceCommand}"`], { windowsVerbatimArguments: true });
   const settingsRouteCodecCommand = `call ${quoted(developerCommand)} -no_logo -arch=x64 -host_arch=x64 >nul && cl.exe /nologo /std:c++17 /EHsc /utf-8 /D_CRT_SECURE_NO_WARNINGS /W4 /WX /I${quoted(includes)} ${quoted(settingsRouteCodecTests)} /Fe:console-tile-settings-route-codec-tests.exe`;
   run(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', `"${settingsRouteCodecCommand}"`], { windowsVerbatimArguments: true });
-  const quarantineCommand = `call ${quoted(developerCommand)} -no_logo -arch=x64 -host_arch=x64 >nul && cl.exe /nologo /std:c++17 /EHsc /utf-8 /D_CRT_SECURE_NO_WARNINGS /DSHELF_TILE_WRITE_QUARANTINE_TEST /W4 /WX /I${quoted(includes)} /I${quoted(path.join(root,'native/third_party'))} ${[source,settings,ui,tileManager,...librarySources,quarantineTests].map(quoted).join(' ')} /Fe:ps5-shortcut-quarantine-tests.exe Ws2_32.lib`;
+  const quarantineCommand = `call ${quoted(developerCommand)} -no_logo -arch=x64 -host_arch=x64 >nul && cl.exe /nologo /std:c++17 /EHsc /utf-8 /D_CRT_SECURE_NO_WARNINGS /DSHELF_TILE_WRITE_QUARANTINE_TEST /W4 /WX /I${quoted(includes)} /I${quoted(path.join(root,'native/third_party'))} ${[source,localization,settings,ui,tileManager,...librarySources,quarantineTests].map(quoted).join(' ')} /Fe:ps5-shortcut-quarantine-tests.exe Ws2_32.lib`;
   run(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', `"${quarantineCommand}"`], { windowsVerbatimArguments: true });
   const dispatchCommand = `call ${quoted(developerCommand)} -no_logo -arch=x64 -host_arch=x64 >nul && cl.exe /nologo /std:c++17 /EHsc /utf-8 /D_CRT_SECURE_NO_WARNINGS /W4 /WX /I${quoted(includes)} ${quoted(consoleTileJobDispatchTests)} /Fe:console-tile-job-dispatch-tests.exe`;
   run(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', `"${dispatchCommand}"`], { windowsVerbatimArguments: true });
@@ -91,7 +91,7 @@ if (process.platform === 'win32') {
 } else {
   run('c++', ['-std=c++17', '-pthread', '-Wall', '-Wextra', '-Werror', '-Wno-error=deprecated', '-Wno-error=missing-field-initializers', '-Wno-error=unused-variable', '-Wno-error=format-truncation', '-I', includes, '-I',path.join(root,'native/third_party'),source, localization, settings, ui, uiBridge, update, tests, settingsTests, uiTests,pairingEntryTests,uiBridgeTests,uiTestPreviewTests,updateTests,consoleTileStartupTests,consoleTileRelayTests,consoleTileForwarderConfigTests,navigationTests,launchTests,...librarySources,libraryTests,'-o', output]);
   run('c++', ['-std=c++17', '-pthread', '-Wall', '-Wextra', '-Werror', '-Wno-error=deprecated', '-Wno-error=format-truncation', '-DSHELF_OWNER_SUPPORT_CONTROL', '-I', includes,
-              '-I', path.join(root,'native/third_party'), source, settings, ui, uiBridge, update, ...librarySources,
+              '-I', path.join(root,'native/third_party'), source, localization, settings, ui, uiBridge, update, ...librarySources,
               publicOwnerSupportTests, '-o', publicOwnerSupportOutput]);
   run('c++', ['-std=c++17', '-Wall', '-Wextra', '-Werror', '-I', includes, consoleTileTests, '-o', consoleTileOutput]);
   run('c++', ['-std=c++17', '-Wall', '-Wextra', '-Werror', '-I', includes,
@@ -101,7 +101,7 @@ if (process.platform === 'win32') {
   run('c++', ['-std=c++17', '-Wall', '-Wextra', '-Werror', '-DISSHELF_PS1_WRITER_HOST_TEST', '-I', includes,
               routeStorePosixTests, '-o', routeStorePosixOutput]);
   run('c++', ['-std=c++17', '-pthread', '-Wall', '-Wextra', '-Werror', '-Wno-error=deprecated', '-Wno-error=format-truncation', '-DSHELF_TILE_WRITE_QUARANTINE_TEST', '-I', includes,
-              '-I', path.join(root,'native/third_party'), source, settings, ui, tileManager, ...librarySources,
+              '-I', path.join(root,'native/third_party'), source, localization, settings, ui, tileManager, ...librarySources,
               quarantineTests, '-o', quarantineOutput]);
   run('c++', ['-std=c++17', '-Wall', '-Wextra', '-Werror', '-I', includes,
               consoleTileJobDispatchTests, '-o', consoleTileJobDispatchOutput]);

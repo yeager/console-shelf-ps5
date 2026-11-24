@@ -142,7 +142,7 @@ bool read_file(const char* path, Settings& output) {
     std::rewind(file);
     Settings parsed;
     constexpr std::size_t room_keys = 11 + system_count * 4;
-    std::array<bool, room_keys + 6 + 64> seen{};
+    std::array<bool, room_keys + 7 + 64> seen{};
     std::array<bool, system_count> shortcut_route_seen{};
     char line[256];
     std::size_t bytes = 0;
@@ -268,6 +268,10 @@ bool read_file(const char* path, Settings& output) {
             key = static_cast<int>(room_keys + 3);
             if (std::strlen(value) >= sizeof(parsed.tv_text) || !valid_text(value, std::strlen(value) + 1)) okay = false;
             else std::memcpy(parsed.tv_text, value, std::strlen(value) + 1);
+        } else if (std::strcmp(line, "tv_text_customized") == 0) {
+            key = static_cast<int>(room_keys + 70);
+            if (std::strcmp(value, "0") != 0 && std::strcmp(value, "1") != 0) okay = false;
+            else parsed.tv_text_customized = value[0] == '1';
         } else if (std::strncmp(line, "game_favorite.", 14) == 0) {
             char* end = nullptr;
             const auto slot = std::strtoul(line + 14, &end, 10);
@@ -348,6 +352,8 @@ bool read_file(const char* path, Settings& output) {
     for (std::size_t i = 0; i < 8; ++i)
         if (!seen[i])
             okay = false;
+    if (!seen[room_keys + 70])
+        parsed.tv_text_customized = std::strcmp(parsed.tv_text, default_room_message.data()) != 0;
     if (!okay || !valid(parsed))
         return false;
     output = parsed;
@@ -425,9 +431,10 @@ bool save_settings(const char* path, const Settings& settings) {
         okay = std::fprintf(file, "monochrome_missing=%d\nshelf_single=%d\nreduced_motion=%d\n",
                             p.monochrome_missing ? 1 : 0, p.shelf_single ? 1 : 0, p.reduced_motion ? 1 : 0) > 0;
     if (okay)
-        okay = std::fprintf(file, "tv_mode=%s\ntv_period=%u\nintro_all=%d\ntv_text=%s\ntv_noise=%s\n",
+        okay = std::fprintf(file, "tv_mode=%s\ntv_period=%u\nintro_all=%d\ntv_text=%s\ntv_text_customized=%d\ntv_noise=%s\n",
                             tv_names[static_cast<std::size_t>(p.tv_mode)], tv_periods[p.tv_period], p.intro_all ? 1 : 0,
-                            settings.tv_text, noise_names[static_cast<std::size_t>(p.tv_noise)]) > 0;
+                            settings.tv_text, settings.tv_text_customized ? 1 : 0,
+                            noise_names[static_cast<std::size_t>(p.tv_noise)]) > 0;
     for (std::size_t i = 0; i < settings.game_favorites.size() && okay; ++i)
         okay = std::fprintf(file, "game_favorite.%zu=%016llx\n", i,
                             static_cast<unsigned long long>(settings.game_favorites[i])) > 0;
