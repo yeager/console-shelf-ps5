@@ -29,6 +29,7 @@ run('shot:english-home.png,settings,down,down,down,down,down,shot:english-appear
 const swedishData=path.join(directory,'swedish-data');fs.mkdirSync(swedishData);
 fs.copyFileSync(path.join(data,'settings.ini'),path.join(swedishData,'settings.ini'));
 run('settings,down,down,down,down,down,right,shot:swedish-appearance.png,back,report:swedish-changed.json',swedishData);
+run('settings,shot:swedish-appearance-layout.png',swedishData);
 const swedishChanged=JSON.parse(fs.readFileSync(path.join(captures,'swedish-changed.json')));
 assert.equal(swedishChanged.language,'sv','controller selects the visible Swedish language row');
 run('report:swedish-reopened.json,shot:swedish-home.png,settings,tab,tab,tab,shot:swedish-room.png',swedishData);
@@ -37,6 +38,7 @@ assert.equal(swedishReopened.language,'sv','controller-selected language persist
 const digest=name=>crypto.createHash('sha256').update(fs.readFileSync(path.join(captures,name))).digest('hex');
 assert.notEqual(digest('english-home.png'),digest('swedish-home.png'),'matching Home screens visibly render Swedish labels');
 assert.notEqual(digest('english-appearance-language.png'),digest('swedish-appearance.png'),'matching Appearance states visibly render the Swedish language label');
+assert.notEqual(digest('swedish-appearance-layout.png'),digest('swedish-appearance.png'),'the Swedish Appearance page renders the full controls layout');
 assert.notEqual(digest('english-room.png'),digest('swedish-room.png'),'matching Play room screens visibly render Swedish labels');
 const englishCloseData=path.join(directory,'english-close-data');fs.mkdirSync(englishCloseData);
 fs.copyFileSync(path.join(data,'settings.ini'),path.join(englishCloseData,'settings.ini'));
@@ -211,7 +213,7 @@ run('back,frame:250,shot:close-hint.png,report:close-hint.json,frame:2000,frame:
 assert.equal(JSON.parse(fs.readFileSync(path.join(captures,'close-hint.json'))).page,0,'a Circle tap keeps the home page');
 assert.notEqual(digest('close-hint.png'),digest('close-hint-fade.png'),'the compact hint fades away');
 assert.equal(digest('close-hint-gone.png'),digest('reveal-reference.png'),'the timed hint leaves no modal or overlay');
-const images=['home.png','details.png','appearance.png','browse.png','consoles.png','swipe.png','swedish-home.png','swedish-appearance.png','swedish-room.png','megadrive.png','display-shelf.png','display-shelf-page2.png','display-shelf-reopened.png','native-ps5-tile.png','native-ps5-global-action.png','orbit-start.png','orbit-middle.png','orbit-end.png','orbit-reference.png','loading.png','prepared-cover.png','loading-motion.png','reveal-start.png','reveal-middle.png','reveal-end.png','hold-middle.png','hold-cancelled.png','close-start.png','close-middle.png','settings-focus.png','layout-focus.png','launch-art.png','close-hint.png','close-hint-fade.png','close-hint-gone.png'];
+const images=['home.png','details.png','appearance.png','browse.png','consoles.png','swipe.png','swedish-home.png','swedish-appearance.png','swedish-appearance-layout.png','swedish-room.png','megadrive.png','display-shelf.png','display-shelf-page2.png','display-shelf-reopened.png','native-ps5-tile.png','native-ps5-global-action.png','orbit-start.png','orbit-middle.png','orbit-end.png','orbit-reference.png','loading.png','prepared-cover.png','loading-motion.png','reveal-start.png','reveal-middle.png','reveal-end.png','hold-middle.png','hold-cancelled.png','close-start.png','close-middle.png','settings-focus.png','layout-focus.png','launch-art.png','close-hint.png','close-hint-fade.png','close-hint-gone.png'];
 const launchData=path.join(directory,'launch-label-data'),libraryRoot=path.join(directory,'library-fixture');fs.mkdirSync(launchData);
 function fixture(name,raw){const output=path.join(libraryRoot,name);fs.mkdirSync(path.dirname(output),{recursive:true});fs.writeFileSync(output,raw);}
 for(const [id,name] of [['PPSA97510','PSXS5'],['PPSA99169','RetroArch']]){

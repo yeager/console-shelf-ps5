@@ -767,11 +767,13 @@ void switch_control(int x, int y, bool on) {
 }
 void label(int x, int y, std::string_view heading, std::string_view value, bool selected, int w = 1032, int h = 86) {
     box(x, y, w, h, selected);
-    ui_text(heading, x + 22, y + 12, 21, muted);
+    const int heading_y = y + std::max(6, (h - 56) / 2);
+    const int value_y = heading_y + 23;
+    ui_text(heading, x + 22, heading_y, 21, muted);
     // Values can be user content (for example the Play room message), so only
     // localize the UI label. Callers localize known choice values explicitly.
-    text(value, x + 22, y + 39, 27, white, true, w - 80);
-    text("<  >", x + w - 94, y + 29, 24, selected ? purple : muted);
+    text(value, x + 22, value_y, 27, white, true, w - 80);
+    text("<  >", x + w - 94, y + (h - 24) / 2, 24, selected ? purple : muted);
 }
 void footer(std::string_view hint, int text_x = 80) {
     rect(0, 1015, width, 65, {9, 12, 26, 245});
@@ -1578,7 +1580,7 @@ void settings(const UiState& state) {
         ui_text("Your shelf, your style", content_x, 338, 34, white, true);
         ui_text("Choose Grid, curved Swipe, or a lit display Shelf.", content_x, 388, 24, muted);
         // Six compact rows leave a clear gap above the persistent footer.
-        constexpr int row_height = 70;
+        constexpr int row_height = 64;
         setting_label(414, "Layout", localize(display_language, layout_labels[static_cast<std::size_t>(p.layout)]), state.settings_focus == 0, row_height);
         setting_label(489, "Grid look", localize(display_language, p.layout != Layout::grid ? "Available in Grid layout" :
               p.grid_look == GridLook::icons ? "3D console icons" : "Classic cards"),
