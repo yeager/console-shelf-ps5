@@ -146,6 +146,13 @@ const tvData=path.join(directory,'tv-detail-data');fs.mkdirSync(tvData);
 run('layout,layout,settings,tab,tab,tab,right,right,right,right,back,shot:tv-main.png,confirm,shot:tv-detail.png,right,confirm,shot:tv-library.png',tvData);
 const screen=[1200,88,568,293];
 for(const name of ['tv-detail.png','tv-library.png']) assert.ok(region(path.join(captures,name),...screen).equals(region(path.join(captures,'tv-main.png'),...screen)),'TV content and room screen plane stay intact inside console details and library');
+const tvSwedishData=path.join(directory,'tv-detail-swedish-data');fs.mkdirSync(tvSwedishData);
+const tvSwedishSettings=fs.readFileSync(path.join(tvData,'settings.ini'),'utf8')
+  .replace('language=en','language=sv').replace('tv_mode=message','tv_mode=console');
+fs.writeFileSync(path.join(tvSwedishData,'settings.ini'),tvSwedishSettings);
+run('layout,layout,settings,tab,tab,tab,right,right,right,right,back,shot:tv-swedish-main.png',tvSwedishData);
+assert.ok(!region(path.join(captures,'tv-main.png'),...screen).equals(region(path.join(captures,'tv-swedish-main.png'),...screen)),
+  'matching Selected console TV screens render the Swedish game and emulator counter');
 const videoData=path.join(directory,'tv-video-data');fs.mkdirSync(videoData);
 run('layout,layout,settings,tab,tab,tab,left,down,down,down,confirm,back,report:tv-video.json,shot:tv-video-start.png,frame:1000,shot:tv-video-middle.png,frame:1000,shot:tv-video-later.png',videoData,0,true);
 const videoReport=JSON.parse(fs.readFileSync(path.join(captures,'tv-video.json')));

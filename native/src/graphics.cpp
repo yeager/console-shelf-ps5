@@ -955,7 +955,7 @@ void room_tv(const UiState& state) {
         picture(system.image, x + w / 2 - 140, y + 21, 280, h - 97, alpha, use_monochrome(p, state.inventory[id], system.id));
         tv_lines(system.name, x + 32, y + h - 79, w - 64, 25, {233, 249, 246, alpha});
         if (p.tv_mode == TvMode::console) {
-            char counts[96]; std::snprintf(counts, sizeof(counts), "%zu games  /  %zu emulator routes",
+            char counts[96]; std::snprintf(counts, sizeof(counts), localize(display_language, "%zu games  /  %zu emulator routes").data(),
                                          state.inventory[id].game_count, state.inventory[id].emulator_count);
             centered(counts, x + w / 2, y + h - 39, 17, {166, 202, 197, alpha});
         } else ui_centered(eligible ? "Add your own intro in Play room" : "Intro set to installed consoles only",

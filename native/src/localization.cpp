@@ -12,6 +12,7 @@ constexpr Entry swedish[] = {
     {"Hold Circle for %u seconds to close", "Håll inne Cirkel i %u sekunder för att stänga"},
     {"Every %u seconds", "Var %u:e sekund"}, {"%zu discovered games", "%zu hittade spel"},
     {"%.*s  /  %.*s  /  %zu systems", "%.*s  /  %.*s  /  %zu system"},
+    {"%zu games  /  %zu emulator routes", "%zu spel  /  %zu emulatorvägar"},
     {"NATIVE DEVELOPMENT BUILD / PC", "NATIV UTVECKLINGSVERSION / PC"},
     {"PS5 / DEVELOPMENT BUILD", "PS5 / UTVECKLINGSVERSION"},
     {"Cross  %.*s    D-pad  Browse    Left / Right  Page    Triangle  Favourite    Circle  Back", "Kryss  %.*s    Styrkors  Bläddra    Vänster / Höger  Sida    Triangel  Favorit    Cirkel  Tillbaka"},
