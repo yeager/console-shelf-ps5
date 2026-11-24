@@ -45,6 +45,7 @@ const manifest = require('../assets/3d-icons/manifest.json');
       await page.reload();
       await page.locator('.card').first().waitFor();
       assert.equal(await page.locator('#brandIcon').getAttribute('src'), image, choice + ' logo persists');
+      await page.locator('#brandIcon').evaluate(logo => logo.decode());
       assert.equal(await page.locator('#brandIcon').evaluate(image => image.complete && image.naturalWidth > 0), true);
       await openPanel('Appearance');
     }
