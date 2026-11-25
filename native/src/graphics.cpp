@@ -1403,7 +1403,8 @@ void console_tile(const UiState& state) {
             }
             char queued[96];
             if (state.tile_removal_count == 1)
-                std::snprintf(queued, sizeof(queued), localize(display_language, "1 isShelf tile is queued.").data());
+                std::snprintf(queued, sizeof(queued), "%s",
+                              localize(display_language, "1 isShelf tile is queued.").data());
             else
                 std::snprintf(queued, sizeof(queued), localize(display_language, "%zu isShelf tiles are queued.").data(),
                               state.tile_removal_count);
