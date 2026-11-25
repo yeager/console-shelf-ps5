@@ -773,7 +773,7 @@ void label(int x, int y, std::string_view heading, std::string_view value, bool 
     // Values can be user content (for example the Play room message), so only
     // localize the UI label. Callers localize known choice values explicitly.
     text(value, x + 22, value_y, 27, white, true, w - 80);
-    text("<  >", x + w - 94, y + (h - 24) / 2, 24, selected ? purple : muted);
+    ui_text("<  >", x + w - 94, y + (h - 24) / 2, 24, selected ? purple : muted);
 }
 void footer(std::string_view hint, int text_x = 80) {
     rect(0, 1015, width, 65, {9, 12, 26, 245});
@@ -1039,10 +1039,11 @@ void home(const UiState& state) {
     icon(p.layout == Layout::grid ? 4 : 2, layout_x + 32, tool_y + 33);
     text(localize(display_language, layout_labels[static_cast<std::size_t>(next_layout(p.layout))]), layout_x + 58, tool_y + 17, 24, white, true);
     char summary[160];
-    std::snprintf(summary, sizeof(summary), "%s  /  %.*s  /  %zu systems", localize(display_language, layout_labels[static_cast<std::size_t>(p.layout)]).data(),
+    std::snprintf(summary, sizeof(summary), localize(display_language, "%s  /  %.*s  /  %zu systems").data(),
+                  localize(display_language, layout_labels[static_cast<std::size_t>(p.layout)]).data(),
                   static_cast<int>(sorts[static_cast<std::size_t>(p.sort)].size()),
                   sorts[static_cast<std::size_t>(p.sort)].data(), shown.count);
-    text(summary, room ? 192 : 84, summary_y, 20, room ? SDL_Color{190, 205, 196, 255} : muted);
+    ui_text(summary, room ? 192 : 84, summary_y, 20, room ? SDL_Color{190, 205, 196, 255} : muted);
     if (!shown.count) {
         if (state.library_discovering) {
             ui_centered("Finding your emulators and games", 960, 620, 42, white, true);
@@ -1076,9 +1077,9 @@ void home(const UiState& state) {
                 ui_text("CONSOLE", x + 22, y + 70, 38, muted, true);
             }
             text(s.name, x + 20, y + 173, 26, white, true, 374);
-            text(availability(state, id), x + 20, y + 212, 19, muted, false, 374);
+            ui_text(availability(state, id), x + 20, y + 212, 19, muted, false, 374);
             if (p.favorite[id])
-                text("*", x + 377, y + 12, 30, purple, true);
+                ui_text("*", x + 377, y + 12, 30, purple, true);
         }
     } else if (p.layout == Layout::shelf) {
         const int first = shelf_motion.page() * 8;
@@ -1116,13 +1117,13 @@ void home(const UiState& state) {
                 centered(system.name, cx, label_y, 20, active ? SDL_Color{white.r, white.g, white.b, opacity} :
                          SDL_Color{219, 225, 238, opacity}, true);
                 if (p.favorite[id])
-                    text("*", cx + offset + 130, contact - art_height, 25, {purple.r, purple.g, purple.b, opacity}, true);
+                    ui_text("*", cx + offset + 130, contact - art_height, 25, {purple.r, purple.g, purple.b, opacity}, true);
             }
         }
         char position[64];
         std::snprintf(position, sizeof(position), "%d-%d / %zu", first + 1,
                       std::min(first + 8, static_cast<int>(shown.count)), shown.count);
-        text(availability(state, state.selected_system), 192, summary_y + 29, 19, {190, 205, 196, 255}, false, 500);
+        ui_text(availability(state, state.selected_system), 192, summary_y + 29, 19, {190, 205, 196, 255}, false, 500);
         text(position, 1008, summary_y, 19, {190, 205, 196, 255});
         char pages[96];
         std::snprintf(pages, sizeof(pages), "%s  %d / %d  %s", state.focus >= 8 ? "L1  <" : "",
@@ -1167,7 +1168,7 @@ void home(const UiState& state) {
         SDL_RenderSetClipRect(renderer, nullptr);
         centered(selected.brand, 960, 845, 18, muted);
         centered(selected.name, 960, 873, 38, white, true);
-        centered(availability(state, state.selected_system), 960, 930, 21, muted);
+        ui_centered(availability(state, state.selected_system), 960, 930, 21, muted);
         char position[48];
         std::snprintf(position, sizeof(position), "%d / %zu", state.focus + 1, shown.count);
         text(position, 1730, 391, 20, muted);
@@ -1193,11 +1194,12 @@ void detail(const UiState& state) {
         glow(1190, 230, 640, 630, accent(s), 110);
         picture(s.image, 1160, 205, 640, 640, 255, use_monochrome(state.settings.preferences, state.inventory[id], s.id));
     }
-    text(availability(state, id), 84, 366, 29, purple, true);
+    ui_text(availability(state, id), 84, 366, 29, purple, true);
     char count[80];
-    std::snprintf(count, sizeof(count), "%zu discovered games", state.inventory[id].game_count);
+    std::snprintf(count, sizeof(count), localize(display_language, "%zu discovered games").data(),
+                  state.inventory[id].game_count);
     if (state.page != Page::library)
-        text(count, 84, 415, 24, muted);
+        ui_text(count, 84, 415, 24, muted);
     if (state.page == Page::library) {
         const auto* route = state.library ? preferred_route(*state.library, id, state.settings.preferred_emulator[id].data()) : nullptr;
         const auto games = state.library ? games_for_system(*state.library, id) : GameList{};
@@ -1211,8 +1213,11 @@ void detail(const UiState& state) {
                                                               : SDL_Color{159, 220, 194, 255};
         rounded(80, 400, 1000, 126, 18, {13, 23, 25, 248});
         rect(80, 420, 4, 86, mode_color);
-        text(route ? route->name : state.inventory[id].built_in ? "PS5 system" : "Launch information",
-             104, 412, 19, {207, 218, 213, 255}, false, 690);
+        if (route)
+            text(route->name, 104, 412, 19, {207, 218, 213, 255}, false, 690);
+        else
+            ui_text(state.inventory[id].built_in ? "PS5 system" : "Launch information",
+                    104, 412, 19, {207, 218, 213, 255}, false, 690);
         ui_text(caption.badge, 842, 412, 17, mode_color, true, 220);
         ui_text(caption.action, 104, 440, 29, white, true, 940);
         ui_text(caption.expectation, 104, 482, 20, {215, 222, 219, 255}, false, 940);
@@ -1231,7 +1236,7 @@ void detail(const UiState& state) {
                 text(game.name, 147, y + 7, 23, white, !state.tools && state.game_focus == start + row, 850);
                 const auto key = game_favorite_key(game);
                 if (std::find(state.settings.game_favorites.begin(), state.settings.game_favorites.end(), key) != state.settings.game_favorites.end())
-                    text("*", 1026, y + 9, 27, purple, true);
+                    ui_text("*", 1026, y + 9, 27, purple, true);
             }
             if (games.count) {
                 char position[80];
@@ -1271,13 +1276,13 @@ void detail(const UiState& state) {
     const bool tile_removing = state.tile_removing[id] || state.tile_removal_batch_ready;
     const bool tile_removal_handoff = state.tile_removal_batch_ready ||
                                       state.tile_removal_handoff[id];
-    text(!console_tile_writes_enabled ? "Home shortcut opening options"
+    ui_text(!console_tile_writes_enabled ? "Home shortcut opening options"
          : tile_removing && tile_removal_handoff ? "Apply queued Home Screen removals"
          : tile_removing ? "Finish PS5 Home Screen removal"
          : !tile_status_known ? "Manage PS5 Home Screen shortcut"
          : state.tile_installed[id] ? "Edit PS5 Home Screen shortcut" : "Add to PS5 Home Screen",
          107, 771, 27, white, true);
-    text(!console_tile_writes_enabled ? "Save where this console's Home tile opens. Tiles are installed separately."
+    ui_text(!console_tile_writes_enabled ? "Save where this console's Home tile opens. Tiles are installed separately."
          : tile_removing && tile_removal_handoff
              ? "Close isShelf once so ShadowMount can apply every queued removal."
          : state.tile_removing[id] ? "Open to verify system removal and clean the recovery copy."
@@ -1293,9 +1298,9 @@ void console_tile(const UiState& state) {
     const bool removing = state.tile_removing[id] || state.tile_removal_batch_ready;
     const bool removal_handoff = state.tile_removal_batch_ready ||
                                  state.tile_removal_handoff[id];
-    text("PS5 HOME SCREEN", 80, 145, 20, purple, true);
+    ui_text("PS5 HOME SCREEN", 80, 145, 20, purple, true);
     text(system.name, 80, 194, 58, white, true, 1100);
-    text(console_tile_writes_enabled && removing
+    ui_text(console_tile_writes_enabled && removing
              ? removal_handoff
                  ? "This shortcut is queued for removal."
                  : "This shortcut is being removed."
@@ -1327,9 +1332,9 @@ void console_tile(const UiState& state) {
         for (int choice = 0; choice < destination_count; ++choice) {
             const int y = 364 + choice * 124;
             box(80, y, 1000, 104, state.tile_focus == choice);
-            text(labels[static_cast<std::size_t>(choice)], 112, y + 15, 29,
+            ui_text(labels[static_cast<std::size_t>(choice)], 112, y + 15, 29,
                  choice == 1 && !emulator_available ? muted : white, true);
-            text(descriptions[static_cast<std::size_t>(choice)], 112, y + 60, 20, muted);
+            ui_text(descriptions[static_cast<std::size_t>(choice)], 112, y + 60, 20, muted);
         }
         // Keep the observation and explanation on an opaque card. The room
         // floor begins below this panel; bare text there loses contrast.
@@ -1341,16 +1346,18 @@ void console_tile(const UiState& state) {
             : saved.preference.destination == ConsoleTileDestination::library ? "Saved: isShelf game library"
             : saved.preference.destination == ConsoleTileDestination::home ? "Saved: isShelf home"
             : "Saved: direct emulator menu";
-        text(saved_name, 112, status_y + 15, 25, white, true);
-        text("Cross saves a destination. This screen cannot add or remove a Home tile.",
+        ui_text(saved_name, 112, status_y + 15, 25, white, true);
+        ui_text("Cross saves a destination. This screen cannot add or remove a Home tile.",
               112, status_y + 55, 19, muted, false, 940);
-        text("SHADOWMOUNT TITLE STATUS (READ ONLY)", 112, status_y + 87, 18, purple, true);
-        const char* observed = state.tile_busy ? "Checking this title..."
-            : state.tile_observation_system == id && state.tile_observation[0]
-                ? state.tile_observation
-            : state.tile_connected ? "Waiting for this title's status..."
-                                   : "ShadowMount status unavailable.";
-        text(observed, 112, status_y + 116, 19, muted, false, 940);
+        ui_text("SHADOWMOUNT TITLE STATUS (READ ONLY)", 112, status_y + 87, 18, purple, true);
+        if (state.tile_busy)
+            ui_text("Checking this title...", 112, status_y + 116, 19, muted, false, 940);
+        else if (state.tile_observation_system == id && state.tile_observation[0])
+            text(state.tile_observation, 112, status_y + 116, 19, muted, false, 940);
+        else if (state.tile_connected)
+            ui_text("Waiting for this title's status...", 112, status_y + 116, 19, muted, false, 940);
+        else
+            ui_text("ShadowMount status unavailable.", 112, status_y + 116, 19, muted, false, 940);
         const char* save_line = state.route_save_system == id &&
                                 state.route_save_status == RouteSaveStatus::unavailable
             ? "Choice could not be confirmed. Reopen isShelf to check."
@@ -1359,7 +1366,7 @@ void console_tile(const UiState& state) {
             : state.route_save_system == id && state.route_save_status == RouteSaveStatus::pending
                 ? "Saving this choice..."
                 : "A Home tile can be added when shortcut installation is available.";
-        text(save_line, 112, status_y + 147, 18, muted, false, 940);
+        ui_text(save_line, 112, status_y + 147, 18, muted, false, 940);
         footer(isshelf_only ? "Cross  Open in isShelf    Circle  Back"
                             : "D-pad  Choose destination    Cross  Save choice    Circle  Back");
         return;
@@ -1367,15 +1374,15 @@ void console_tile(const UiState& state) {
     if (state.tile_emulator_batch_close_ready) {
         char summary[112];
         std::snprintf(summary, sizeof(summary),
-                      "Added %zu and updated %zu console tiles.",
+                      localize(display_language, "Added %zu and updated %zu console tiles.").data(),
                       state.tile_emulator_batch_created,
                       state.tile_emulator_batch_updated);
-        text("Standalone emulators open directly; RetroArch systems open their isShelf library.",
+        ui_text("Standalone emulators open directly; RetroArch systems open their isShelf library.",
              84, 339, 22, muted, false, 1000);
         box(80, 427, 1000, 138, state.tile_focus == 0);
-        text("Close isShelf and update PS5 Home", 110, 447, 27, white, true, 940);
-        text(summary, 110, 503, 24, white, true);
-        text("ShadowMount applies newly queued Home Screen tiles after isShelf closes.",
+        ui_text("Close isShelf and update PS5 Home", 110, 447, 27, white, true, 940);
+        ui_text(summary, 110, 503, 24, white, true);
+        ui_text("ShadowMount applies newly queued Home Screen tiles after isShelf closes.",
              84, 610, 21, muted, false, 1000);
         footer("Cross  Close and apply emulator tiles    Circle  Back");
         return;
@@ -1383,47 +1390,47 @@ void console_tile(const UiState& state) {
     if (removing) {
         if (removal_handoff) {
             if (state.tile_residual_sweep) {
-                text("The post-close helper will check all 52 fixed isShelf registration slots.",
+                ui_text("The post-close helper will check all 52 fixed isShelf registration slots.",
                      84, 339, 22, muted, false, 1000);
                 box(80, 427, 1000, 138, state.tile_focus == 0);
-                text("Close isShelf and clean PS5 Home", 110, 447, 27, white, true, 940);
-                text("Only exact isShelf metadata and artwork matches will be removed.",
+                ui_text("Close isShelf and clean PS5 Home", 110, 447, 27, white, true, 940);
+                ui_text("Only exact isShelf metadata and artwork matches will be removed.",
                      110, 503, 21, white, true, 930);
-                text("ShadowMount applies each accepted removal after isShelf closes; absent slots are skipped.",
+                ui_text("ShadowMount applies each accepted removal after isShelf closes; absent slots are skipped.",
                      84, 610, 20, muted, false, 1000);
                 footer("Cross  Close and verify residual tiles    Circle  Back");
                 return;
             }
             char queued[96];
             if (state.tile_removal_count == 1)
-                std::snprintf(queued, sizeof(queued), "1 isShelf tile is queued.");
+                std::snprintf(queued, sizeof(queued), localize(display_language, "1 isShelf tile is queued.").data());
             else
-                std::snprintf(queued, sizeof(queued), "%zu isShelf tiles are queued.",
+                std::snprintf(queued, sizeof(queued), localize(display_language, "%zu isShelf tiles are queued.").data(),
                               state.tile_removal_count);
-            text("ShadowMount applies Home Screen removals only after isShelf closes.",
+            ui_text("ShadowMount applies Home Screen removals only after isShelf closes.",
                  84, 339, 22, muted);
             box(80, 427, 1000, 138, state.tile_focus == 0);
-            text("Close isShelf and update PS5 Home", 110, 447, 27, white, true, 940);
-            text(queued, 110, 503, 24, white, true);
-            text("Go back to queue more tiles, or press Cross once when you are finished.",
+            ui_text("Close isShelf and update PS5 Home", 110, 447, 27, white, true, 940);
+            ui_text(queued, 110, 503, 24, white, true);
+            ui_text("Go back to queue more tiles, or press Cross once when you are finished.",
                  84, 610, 21, muted, false, 1000);
             footer("Cross  Close and apply queued removals    Circle  Back");
             return;
         }
-        text("isShelf keeps recovery copies until ShadowMount confirms each tile is gone.",
+        ui_text("isShelf keeps recovery copies until ShadowMount confirms each tile is gone.",
              84, 339, 22, muted);
         box(80, 405, 1000, 90, state.tile_focus == 0);
-        text("Verify this tile's removal", 110, 418, 27, white, true, 940);
-        text("Finish and clean this console's recovery data", 110, 458, 19, white, true);
+        ui_text("Verify this tile's removal", 110, 418, 27, white, true, 940);
+        ui_text("Finish and clean this console's recovery data", 110, 458, 19, white, true);
         box(80, 510, 1000, 90, state.tile_focus == 1);
-        text("Finish all queued removals", 110, 523, 27, white, true, 940);
-        text("Rebuild one batch, then close isShelf once so ShadowMount can apply it",
+        ui_text("Finish all queued removals", 110, 523, 27, white, true, 940);
+        ui_text("Rebuild one batch, then close isShelf once so ShadowMount can apply it",
              110, 563, 19, white, true, 930);
         box(80, 615, 1000, 90, state.tile_focus == 2);
-        text("Add or repair all emulator tiles", 110, 628, 27, white, true, 940);
-        text("Finish confirmed removals, then restore every supported emulator shortcut",
+        ui_text("Add or repair all emulator tiles", 110, 628, 27, white, true, 940);
+        ui_text("Finish confirmed removals, then restore every supported emulator shortcut",
              110, 668, 19, muted, false, 930);
-        text("If a registration remains, its recovery copy is kept for a later retry.",
+        ui_text("If a registration remains, its recovery copy is kept for a later retry.",
              84, 735, 21, muted, false, 1000);
         footer("D-pad  Choose action    Cross  Select    Circle  Back");
         return;
@@ -1452,50 +1459,50 @@ void console_tile(const UiState& state) {
     for (int choice = 0; choice < destination_count; ++choice) {
         const int y = 320 + choice * 96;
         box(80, y, 1000, 80, state.tile_focus == choice);
-        text(labels[static_cast<std::size_t>(choice)], 112, y + 7, 25,
+        ui_text(labels[static_cast<std::size_t>(choice)], 112, y + 7, 25,
              state.tile_removing[id] || (choice == 1 && !emulator_available) ? muted : white, true);
-        text(descriptions[static_cast<std::size_t>(choice)], 112, y + 43, 18, muted);
+        ui_text(descriptions[static_cast<std::size_t>(choice)], 112, y + 43, 18, muted);
     }
     const bool installed = state.tile_installed[id];
     const int first_action_y = isshelf_only ? 440 : 608;
     if (installed) {
         box(80, first_action_y, 1000, 50, state.tile_focus == 3);
-        text("Remove this tile", 112, first_action_y + 9, 23, white, true);
+        ui_text("Remove this tile", 112, first_action_y + 9, 23, white, true);
     }
     const int emulator_all_focus = installed ? 4 : 3;
     const int emulator_all_y = isshelf_only
         ? first_action_y + (installed ? 62 : 0)
         : installed ? 670 : 608;
     box(80, emulator_all_y, 1000, 70, state.tile_focus == emulator_all_focus);
-    text(state.tile_batch_busy && state.pending_tile.action == ConsoleTileAction::upsert_emulators
+    ui_text(state.tile_batch_busy && state.pending_tile.action == ConsoleTileAction::upsert_emulators
              ? "Adding or repairing emulator tiles..."
              : isshelf_only ? "Add or repair all other emulator tiles"
                             : "Add or repair all emulator tiles",
          112, emulator_all_y + 7, 24, white, true);
-    text(isshelf_only
+    ui_text(isshelf_only
              ? "Keeps this native tile in isShelf while repairing supported emulator shortcuts."
              : "Standalone emulators open directly; RetroArch systems open the matching isShelf library.",
          112, emulator_all_y + 39, 17, muted, false, 930);
     const int refresh_focus = installed ? 5 : 4;
     const int refresh_y = isshelf_only ? emulator_all_y + 82 : installed ? 752 : 690;
     box(80, refresh_y, 1000, 70, state.tile_focus == refresh_focus);
-    text(state.tile_batch_busy && state.pending_tile.action == ConsoleTileAction::refresh_installed
+    ui_text(state.tile_batch_busy && state.pending_tile.action == ConsoleTileAction::refresh_installed
              ? "Updating installed shortcuts..."
                                : "Update all installed shortcuts",
          112, refresh_y + 7, 24, white, true);
-    text("Normalizes unsupported routes; re-registers stale artwork and refreshes the runtime.",
+    ui_text("Normalizes unsupported routes; re-registers stale artwork and refreshes the runtime.",
          112, refresh_y + 39, 17, muted, false, 930);
     const int remove_all_focus = installed ? 6 : 5;
     const int remove_all_y = isshelf_only ? refresh_y + 82 : installed ? 834 : 772;
     box(80, remove_all_y, 1000, 82, state.tile_focus == remove_all_focus);
-    text(state.tile_batch_busy && state.pending_tile.action == ConsoleTileAction::remove_installed
+    ui_text(state.tile_batch_busy && state.pending_tile.action == ConsoleTileAction::remove_installed
              ? "Queueing all removals..."
              : "Remove all isShelf tiles",
          112, remove_all_y + 7, 24, white, true);
-    text("Queues every owned tile, then closes isShelf once so ShadowMount can update Home.",
+    ui_text("Queues every owned tile, then closes isShelf once so ShadowMount can update Home.",
          112, remove_all_y + 43, 17, muted, false, 930);
     if (!isshelf_only && route && !emulator_available)
-        text(shared_retroarch ? "RetroArch has no selected-system menu launch; use isShelf game library."
+        ui_text(shared_retroarch ? "RetroArch has no selected-system menu launch; use isShelf game library."
                               : "The direct emulator menu is currently unavailable.",
              84, 928, 17, muted);
     footer("D-pad  Choose action    Cross  Select    Circle  Back");
@@ -1503,16 +1510,16 @@ void console_tile(const UiState& state) {
 void shortcut_route(const UiState& state) {
     const auto id = state.shortcut_route_system;
     if (id >= system_count) {
-        text("SHORTCUT UNAVAILABLE", 164, 145, 20, purple, true);
-        text("Open the main isShelf tile instead.", 164, 194, 40, white, true);
+        ui_text("SHORTCUT UNAVAILABLE", 164, 145, 20, purple, true);
+        ui_text("Open the main isShelf tile instead.", 164, 194, 40, white, true);
         footer("Hold Circle  Close isShelf", 164);
         return;
     }
     const auto& system = catalog[id];
     const bool isshelf_only = console_tile_isshelf_only(id);
-    text("OPEN FROM PS5 HOME", 164, 145, 20, purple, true);
+    ui_text("OPEN FROM PS5 HOME", 164, 145, 20, purple, true);
     text(system.name, 164, 194, 58, white, true, 1000);
-    text(isshelf_only ? "This native console tile opens only in isShelf."
+    ui_text(isshelf_only ? "This native console tile opens only in isShelf."
                       : "Choose where this console's Home tile opens.",
          168, 287, 28, muted);
     glow(1230, 310, 540, 540, accent(system), 95);
@@ -1543,11 +1550,11 @@ void shortcut_route(const UiState& state) {
         box(164, y, 1000, 104, state.shortcut_route_focus == choice);
         const bool enabled = choice == 2 ||
                              (state.shortcut_route_ready && (choice != 1 || emulator_available));
-        text(labels[static_cast<std::size_t>(choice)], 196, y + 15, 29,
+        ui_text(labels[static_cast<std::size_t>(choice)], 196, y + 15, 29,
              enabled ? white : muted, true);
-        text(descriptions[static_cast<std::size_t>(choice)], 196, y + 60, 20, muted);
+        ui_text(descriptions[static_cast<std::size_t>(choice)], 196, y + 60, 20, muted);
     }
-    text(state.shortcut_route_ready ? "This choice is saved, then opens now."
+    ui_text(state.shortcut_route_ready ? "This choice is saved, then opens now."
                                     : isshelf_only
                                           ? "Library scan incomplete. Reopen with ftpsrv running."
                                           : "Library scan incomplete. Home can still be saved and opened.",
@@ -1699,7 +1706,7 @@ void keyboard(const UiState& state) {
                                              : label_text;
         key == '<' || key == '_' || key == '!' || key == '^'
             ? ui_centered(displayed, x + 52, y + 15, 19, active ? panel : white, true)
-            : centered(displayed, x + 52, y + 15, 26, active ? panel : white, true);
+            : ui_centered(displayed, x + 52, y + 15, 26, active ? panel : white, true);
     }
     ui_text("Cross  Type     Square  Delete     Triangle  Clear     Options / Circle  Done", 384, 783, 22, muted);
 }
@@ -1710,16 +1717,18 @@ void update_prompt(const UiState& state) {
     rounded(430, 286, 1060, 7, 3, purple);
     const bool recovery = state.update_prompt == UpdatePrompt::recovery;
     const bool preparing = state.update_prompt == UpdatePrompt::preparing;
-    centered(preparing ? "Preparing your update" : recovery ? "Resume interrupted update"
+    ui_centered(preparing ? "Preparing your update" : recovery ? "Resume interrupted update"
                                                        : "isShelf update available",
              960, 342, 34, white, true);
     if (state.update_tag[0])
         centered(state.update_tag, 960, 399, 23, purple, true);
-    centered(state.update_message[0] ? state.update_message :
-                 preparing ? "Downloading and verifying the official production package."
-                 : recovery ? "Your verified update files are still safe and ready to continue."
-                            : "A newer production build is ready.",
-             960, 451, 21, muted);
+    if (state.update_message[0])
+        centered(state.update_message, 960, 451, 21, muted);
+    else
+        ui_centered(preparing ? "Downloading and verifying the official production package."
+                              : recovery ? "Your verified update files are still safe and ready to continue."
+                                         : "A newer production build is ready.",
+                    960, 451, 21, muted);
     if (preparing) {
         const int progress = std::max(0, std::min(100, state.update_progress));
         rounded(570, 550, 780, 14, 7, {52, 55, 77, 255});
@@ -1728,21 +1737,21 @@ void update_prompt(const UiState& state) {
         char label[32];
         std::snprintf(label, sizeof(label), "%d%%", progress);
         centered(label, 960, 588, 22, white, true);
-        centered("Circle cancels safely. You can resume this update later.", 960, 670, 20, muted);
+        ui_centered("Circle cancels safely. You can resume this update later.", 960, 670, 20, muted);
         return;
     }
-    centered(recovery ? "Continue the exact verified update, or leave it for another time."
+    ui_centered(recovery ? "Continue the exact verified update, or leave it for another time."
                       : "isShelf will close, install safely, and reopen.",
              960, 502, 20, muted);
-    centered("Settings, emulators, games, BIOS, saves and personal artwork stay untouched.",
+    ui_centered("Settings, emulators, games, BIOS, saves and personal artwork stay untouched.",
              960, 538, 18, muted);
     const SDL_Color selected{92, 66, 150, 255};
     const SDL_Color idle{43, 46, 68, 255};
     rounded(560, 624, 360, 82, 18, state.update_focus == 0 ? selected : idle);
     rounded(1000, 624, 360, 82, 18, state.update_focus == 1 ? selected : idle);
-    centered(recovery ? "Resume update" : "Update now", 740, 647, 23, white, true);
-    centered("Later", 1180, 647, 23, white, true);
-    centered("Use left/right and Cross to choose", 960, 739, 17, muted);
+    ui_centered(recovery ? "Resume update" : "Update now", 740, 647, 23, white, true);
+    ui_centered("Later", 1180, 647, 23, white, true);
+    ui_centered("Use left/right and Cross to choose", 960, 739, 17, muted);
 }
 } // namespace
 
@@ -1867,9 +1876,9 @@ void graphics_render(const UiState& state, unsigned time_ms, bool animate) {
             const bool constrained_header = room_visible || state.page == Page::shortcut_route;
             const int brand_x = constrained_header ? 164 : 80;
             picture(icon_files[static_cast<std::size_t>(state.settings.preferences.icon)], brand_x, 30, 50, 50);
-            text("isShelf", brand_x + 67, 36, 29, white, true);
+            ui_text("isShelf", brand_x + 67, 36, 29, white, true);
             if (state.ui_test_active)
-                text("REMOTE SUPPORT ACTIVE / L3 + R3 TO STOP", 1170, 42, 18, purple, true);
+                ui_text("REMOTE SUPPORT ACTIVE / L3 + R3 TO STOP", 1170, 42, 18, purple, true);
             else {
 #ifdef SHELF_PS5
                 ui_text("PS5 / DEVELOPMENT BUILD", 1388, 42, 18, muted, true);
@@ -1898,7 +1907,7 @@ void graphics_render(const UiState& state, unsigned time_ms, bool animate) {
         }
         if (state.notice[0] && state.presentation.hold <= 0) {
             rounded(300, 931, 1320, 64, 16, {57, 46, 84, 255});
-            centered(state.notice, 960, 948, 24, white);
+            ui_centered(state.notice, 960, 948, 24, white);
         }
         update_prompt(state);
     }
