@@ -143,16 +143,25 @@ for(const area of [[200,548,1500,4],[200,739,1500,3],[100,820,1700,70]]){
 }
 assert.notEqual(digest('missing-monochrome.png'),digest('missing-full-colour.png'),'missing-emulator style changes the rendered artwork');
 const tvData=path.join(directory,'tv-detail-data');fs.mkdirSync(tvData);
-run('layout,layout,settings,tab,tab,tab,right,right,right,right,back,shot:tv-main.png,confirm,shot:tv-detail.png,right,confirm,shot:tv-library.png',tvData);
+const tvEnglishSettings=['version=1','layout=shelf','look=icons','scope=all','sort=featured','filter=all','icon=vector','brand=','language=en','tv_mode=console','tv_noise=off'].join('\n')+'\n';
+fs.writeFileSync(path.join(tvData,'settings.ini'),tvEnglishSettings);
+run('report:tv-english.json,shot:tv-main.png',tvData);
+const tvEnglishReport=JSON.parse(fs.readFileSync(path.join(captures,'tv-english.json')));
+assert.equal(tvEnglishReport.layout,'shelf');assert.equal(tvEnglishReport.tvMode,0);
+run('confirm,shot:tv-detail.png,right,confirm,shot:tv-library.png',tvData);
 const screen=[1200,88,568,293];
 for(const name of ['tv-detail.png','tv-library.png']) assert.ok(region(path.join(captures,name),...screen).equals(region(path.join(captures,'tv-main.png'),...screen)),'TV content and room screen plane stay intact inside console details and library');
 const tvSwedishData=path.join(directory,'tv-detail-swedish-data');fs.mkdirSync(tvSwedishData);
-const tvSwedishSettings=fs.readFileSync(path.join(tvData,'settings.ini'),'utf8')
-  .replace('language=en','language=sv').replace('tv_mode=message','tv_mode=console');
+const tvSwedishSettings=tvEnglishSettings.replace('language=en','language=sv');
+assert.equal(tvSwedishSettings.replace('language=sv','language=en'),tvEnglishSettings,'English and Swedish TV fixtures differ only by language');
 fs.writeFileSync(path.join(tvSwedishData,'settings.ini'),tvSwedishSettings);
-run('layout,layout,settings,tab,tab,tab,right,right,right,right,back,shot:tv-swedish-main.png',tvSwedishData);
-assert.ok(!region(path.join(captures,'tv-main.png'),...screen).equals(region(path.join(captures,'tv-swedish-main.png'),...screen)),
-  'matching Selected console TV screens render the Swedish game and emulator counter');
+run('report:tv-swedish.json,shot:tv-swedish-main.png',tvSwedishData);
+const tvSwedishReport=JSON.parse(fs.readFileSync(path.join(captures,'tv-swedish.json')));
+assert.equal(tvSwedishReport.layout,'shelf');assert.equal(tvSwedishReport.tvMode,0);
+assert.equal(tvSwedishReport.layout,tvEnglishReport.layout);assert.equal(tvSwedishReport.tvMode,tvEnglishReport.tvMode);
+const tvCounter=[1200,338,568,40];
+assert.ok(!region(path.join(captures,'tv-main.png'),...tvCounter).equals(region(path.join(captures,'tv-swedish-main.png'),...tvCounter)),
+  'matching Shelf / Selected console fixtures localize only the TV game and emulator counter region');
 const videoData=path.join(directory,'tv-video-data');fs.mkdirSync(videoData);
 run('layout,layout,settings,tab,tab,tab,left,down,down,down,confirm,back,report:tv-video.json,shot:tv-video-start.png,frame:1000,shot:tv-video-middle.png,frame:1000,shot:tv-video-later.png',videoData,0,true);
 const videoReport=JSON.parse(fs.readFileSync(path.join(captures,'tv-video.json')));

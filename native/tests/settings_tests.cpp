@@ -27,6 +27,7 @@ void write(const char* path, const char* text) {
 void test_settings() {
     using namespace shelf;
     check(localize(Language::swedish, "Language") == "Språk", "Swedish catalogue translates a UI key");
+    check(localize(Language::swedish, "Featured order") == "Utvald ordning", "Swedish catalogue translates Home sort labels");
     check(localize(Language::swedish, "Selected console") == "Vald konsol", "Swedish catalogue translates TV choices");
     check(localize(Language::swedish, "%zu of %zu %s") == "%zu av %zu %s", "Swedish catalogue translates formatted counters");
     check(localize(Language::swedish, "%zu games  /  %zu emulator routes") == "%zu spel  /  %zu emulatorvägar",

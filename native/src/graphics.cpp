@@ -1039,10 +1039,10 @@ void home(const UiState& state) {
     icon(p.layout == Layout::grid ? 4 : 2, layout_x + 32, tool_y + 33);
     text(localize(display_language, layout_labels[static_cast<std::size_t>(next_layout(p.layout))]), layout_x + 58, tool_y + 17, 24, white, true);
     char summary[160];
+    const auto sort_label = localize(display_language, sorts[static_cast<std::size_t>(p.sort)]);
     std::snprintf(summary, sizeof(summary), localize(display_language, "%s  /  %.*s  /  %zu systems").data(),
                   localize(display_language, layout_labels[static_cast<std::size_t>(p.layout)]).data(),
-                  static_cast<int>(sorts[static_cast<std::size_t>(p.sort)].size()),
-                  sorts[static_cast<std::size_t>(p.sort)].data(), shown.count);
+                  static_cast<int>(sort_label.size()), sort_label.data(), shown.count);
     ui_text(summary, room ? 192 : 84, summary_y, 20, room ? SDL_Color{190, 205, 196, 255} : muted);
     if (!shown.count) {
         if (state.library_discovering) {
